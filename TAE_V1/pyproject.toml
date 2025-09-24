@@ -1,0 +1,43 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "tae-v1"
+version = "1.0.0"
+description = "Team Agent Executor V1 - Runtime agent task execution module"
+readme = "README.md"
+license = {file = "../LICENSE"}
+authors = [
+    {name = "Adriano San Carneiro", email = "adrianosancarneiro@gmail.com"}
+]
+requires-python = ">=3.11"
+dependencies = [
+    "langchain>=0.1.0",
+    "langgraph>=0.0.30",
+    "fastapi>=0.109.0",
+    "uvicorn[standard]>=0.27.0",
+    "pydantic>=2.6.0",
+    "python-dotenv>=1.0.0",
+    "typer>=0.9.0",
+    "rich>=13.7.0",
+    "docker>=7.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "black>=24.0.0",
+    "isort>=5.13.0",
+    "mypy>=1.8.0",
+]
+
+[project.scripts]
+tae-execute = "main:execute"
+tae-server = "main:server"
+
+[tool.black]
+line-length = 88
+
+[tool.isort]
+profile = "black"

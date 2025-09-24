@@ -3,3 +3,4 @@
 __version__ = "0.1.0"
 __author__ = "Adriano San Carneiro"
 __email__ = "adrianosancarneiro@gmail.com"
+__description__ = "Multi-agent orchestration and execution platform with RTX 5090 optimization"

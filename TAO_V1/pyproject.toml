@@ -1,0 +1,44 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "tao-v1"
+version = "1.0.0"
+description = "Team Agent Orchestrator V1 - Multi-agent workflow coordination module"
+readme = "README.md"
+license = {file = "../LICENSE"}
+authors = [
+    {name = "Adriano San Carneiro", email = "adrianosancarneiro@gmail.com"}
+]
+requires-python = ">=3.11"
+dependencies = [
+    "langchain>=0.1.0",
+    "langgraph>=0.0.30",
+    "fastapi>=0.109.0",
+    "uvicorn[standard]>=0.27.0",
+    "pydantic>=2.6.0",
+    "python-dotenv>=1.0.0",
+    "typer>=0.9.0",
+    "rich>=13.7.0",
+    "qdrant-client>=1.7.0",
+    "neo4j>=5.17.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "black>=24.0.0",
+    "isort>=5.13.0",
+    "mypy>=1.8.0",
+]
+
+[project.scripts]
+tao-orchestrate = "main:orchestrate"
+tao-server = "main:server"
+
+[tool.black]
+line-length = 88
+
+[tool.isort]
+profile = "black"

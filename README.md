@@ -66,11 +66,12 @@ chmod +x AI_Support_Services_Containers/setup-high-performance-stack.sh
 
 ```
 TA_V8/
-├── ta_v8/                          # Main Python package
 ├── TAB_V1/                         # Team Agent Builder module
 ├── TAE_V1/                         # Team Agent Executor module  
 ├── TAO_V1/                         # Team Agent Orchestrator module
+├── scripts/                        # CLI scripts and utilities
 ├── AI_Support_Services_Containers/ # Docker configurations
+├── version.py                      # Version and package info
 ├── pyproject.toml                  # UV/Python project configuration
 └── RTX 5090 sm_120 CUDA Compatibility Guide for Docker ML Workloads.pdf
 ```

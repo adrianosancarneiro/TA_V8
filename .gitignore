@@ -121,12 +121,20 @@ celerybeat.pid
 
 # Environments
 .env
+.env.*
 .venv
 env/
 venv/
 ENV/
 env.bak/
 venv.bak/
+
+# Configuration files that may contain sensitive references
+config.local.env
+secrets.local.env
+
+# System secrets directory (should never be committed)
+/etc/TA_V8/
 
 # Spyder project settings
 .spyderproject

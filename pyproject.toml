@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "ta-v8"
 version = "0.1.0"
-description = "Team Agent Platform V8 - Multi-agent orchestration and execution platform"
+description = "Team Agent Platform V8 - Multi-agent orchestration platform with integrated TAB, TAE, and TAO modules"
 readme = "README.md"
 license = {file = "LICENSE"}
 authors = [
@@ -20,9 +20,8 @@ keywords = [
     "multi-agent",
     "orchestration",
     "team-agents",
-    "langraph",
-    "docker",
-    "containerization"
+    "platform",
+    "integration"
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -37,65 +36,15 @@ classifiers = [
 ]
 requires-python = ">=3.11"
 dependencies = [
-    # Core AI/ML frameworks
-    "langchain>=0.1.0",
-    "langchain-community>=0.0.20",
-    "langgraph>=0.0.30",
-    "langsmith>=0.0.80",
-    "openai>=1.12.0",
-    "anthropic>=0.21.0",
-    
-    # Vector databases and search
-    "qdrant-client>=1.7.0",
-    "chromadb>=0.4.22",
-    "faiss-cpu>=1.7.4",
-    
-    # Database connections
-    "psycopg2-binary>=2.9.9",
-    "neo4j>=5.17.0",
-    "sqlalchemy>=2.0.25",
-    "alembic>=1.13.1",
-    
-    # Web framework and API
+    # Integration layer dependencies
     "fastapi>=0.109.0",
     "uvicorn[standard]>=0.27.0",
     "pydantic>=2.6.0",
-    "pydantic-settings>=2.2.0",
-    
-    # Data processing and utilities
-    "pandas>=2.2.0",
-    "numpy>=1.26.0",
-    "pyyaml>=6.0.1",
-    "python-dotenv>=1.0.0",
-    "python-multipart>=0.0.6",
-    
-    # Document processing
-    "pypdf>=4.0.1",
-    "python-docx>=1.1.0",
-    "markdown>=3.5.2",
-    
-    # Embeddings and transformers
-    "sentence-transformers>=2.3.1",
-    "transformers>=4.37.0",
-    "torch>=2.2.0",
-    
-    # HTTP clients and utilities
     "httpx>=0.26.0",
-    "requests>=2.31.0",
-    "aiofiles>=23.2.1",
-    
-    # Logging and monitoring
-    "structlog>=23.2.0",
-    "prometheus-client>=0.19.0",
-    
-    # Container and orchestration
-    "docker>=7.0.0",
-    "kubernetes>=29.0.0",
-    
-    # Development and testing utilities
-    "rich>=13.7.0",
+    "python-dotenv>=1.0.0",
+    "pyyaml>=6.0.1",
     "typer>=0.9.0",
-    "click>=8.1.7",
+    "rich>=13.7.0",
 ]
 
 [project.optional-dependencies]
@@ -130,14 +79,14 @@ Documentation = "https://github.com/adrianosancarneiro/TA_V8/wiki"
 Issues = "https://github.com/adrianosancarneiro/TA_V8/issues"
 
 [project.scripts]
-ta-setup = "ta_v8.scripts.setup:main"
-ta-health = "ta_v8.scripts.health:main"
+ta-setup = "scripts.setup:main"
+ta-health = "scripts.health:main"
 
 [tool.hatch.version]
-path = "ta_v8/__init__.py"
+path = "version.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["ta_v8"]
+packages = ["TAB_V1", "TAE_V1", "TAO_V1", "scripts"]
 
 [tool.black]
 line-length = 88
@@ -163,7 +112,7 @@ extend-exclude = '''
 profile = "black"
 multi_line_output = 3
 line_length = 88
-known_first_party = ["ta_v8"]
+known_first_party = ["TAB_V1", "TAE_V1", "TAO_V1", "scripts"]
 
 [tool.pytest.ini_options]
 minversion = "6.0"
@@ -182,7 +131,7 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["ta_v8"]
+source = ["TAB_V1", "TAE_V1", "TAO_V1", "scripts"]
 branch = true
 
 [tool.coverage.report]
