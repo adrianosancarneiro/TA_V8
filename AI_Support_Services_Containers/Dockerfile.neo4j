@@ -1,0 +1,24 @@
+# Dockerfile.neo4j - FIXED VERSION
+FROM neo4j:5.15-community
+
+# Install additional monitoring tools and curl
+USER root
+RUN apt-get update && apt-get install -y \
+    htop \
+    iotop \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Pre-download APOC plugin (correct version for Neo4j 5.15)
+RUN mkdir -p /var/lib/neo4j/plugins && \
+    cd /var/lib/neo4j/plugins && \
+    curl -L https://github.com/neo4j/apoc/releases/download/5.15.0/apoc-5.15.0-core.jar -o apoc.jar && \
+    chmod 644 apoc.jar
+
+USER neo4j
+
+EXPOSE 7474 7687
+
+# Simple health check that doesn't require auth
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:7474 || exit 1

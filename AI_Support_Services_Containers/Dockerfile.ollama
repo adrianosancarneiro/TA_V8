@@ -1,0 +1,27 @@
+# Dockerfile.ollama - FIXED VERSION
+FROM ollama/ollama:latest
+
+# Install additional tools for optimization
+RUN apt-get update && apt-get install -y \
+    curl \
+    htop \
+    nvtop \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create optimized startup script
+RUN echo '#!/bin/bash\n\
+# Set GPU environment variables\n\
+export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}\n\
+export OLLAMA_NUM_GPU=${OLLAMA_NUM_GPU:-1}\n\
+export OLLAMA_GPU_LAYERS=${OLLAMA_GPU_LAYERS:-999}\n\
+# Start Ollama server\n\
+exec /bin/ollama serve' > /start.sh && chmod +x /start.sh
+
+EXPOSE 11434
+
+# Health check with longer startup period for large models
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s \
+    CMD curl -f http://localhost:11434/api/version || exit 1
+
+# Override the entrypoint to use our startup script
+ENTRYPOINT ["/start.sh"]

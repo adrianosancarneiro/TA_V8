@@ -1,0 +1,220 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ta-v8"
+version = "0.1.0"
+description = "Team Agent Platform V8 - Multi-agent orchestration and execution platform"
+readme = "README.md"
+license = {file = "LICENSE"}
+authors = [
+    {name = "Adriano San Carneiro", email = "adrianosancarneiro@gmail.com"}
+]
+maintainers = [
+    {name = "Adriano San Carneiro", email = "adrianosancarneiro@gmail.com"}
+]
+keywords = [
+    "ai",
+    "agents", 
+    "multi-agent",
+    "orchestration",
+    "team-agents",
+    "langraph",
+    "docker",
+    "containerization"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+requires-python = ">=3.11"
+dependencies = [
+    # Core AI/ML frameworks
+    "langchain>=0.1.0",
+    "langchain-community>=0.0.20",
+    "langgraph>=0.0.30",
+    "langsmith>=0.0.80",
+    "openai>=1.12.0",
+    "anthropic>=0.21.0",
+    
+    # Vector databases and search
+    "qdrant-client>=1.7.0",
+    "chromadb>=0.4.22",
+    "faiss-cpu>=1.7.4",
+    
+    # Database connections
+    "psycopg2-binary>=2.9.9",
+    "neo4j>=5.17.0",
+    "sqlalchemy>=2.0.25",
+    "alembic>=1.13.1",
+    
+    # Web framework and API
+    "fastapi>=0.109.0",
+    "uvicorn[standard]>=0.27.0",
+    "pydantic>=2.6.0",
+    "pydantic-settings>=2.2.0",
+    
+    # Data processing and utilities
+    "pandas>=2.2.0",
+    "numpy>=1.26.0",
+    "pyyaml>=6.0.1",
+    "python-dotenv>=1.0.0",
+    "python-multipart>=0.0.6",
+    
+    # Document processing
+    "pypdf>=4.0.1",
+    "python-docx>=1.1.0",
+    "markdown>=3.5.2",
+    
+    # Embeddings and transformers
+    "sentence-transformers>=2.3.1",
+    "transformers>=4.37.0",
+    "torch>=2.2.0",
+    
+    # HTTP clients and utilities
+    "httpx>=0.26.0",
+    "requests>=2.31.0",
+    "aiofiles>=23.2.1",
+    
+    # Logging and monitoring
+    "structlog>=23.2.0",
+    "prometheus-client>=0.19.0",
+    
+    # Container and orchestration
+    "docker>=7.0.0",
+    "kubernetes>=29.0.0",
+    
+    # Development and testing utilities
+    "rich>=13.7.0",
+    "typer>=0.9.0",
+    "click>=8.1.7",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.0.0",
+    "pytest-mock>=3.12.0",
+    "black>=24.0.0",
+    "isort>=5.13.0",
+    "flake8>=7.0.0",
+    "mypy>=1.8.0",
+    "pre-commit>=3.6.0",
+    "bandit>=1.7.7",
+]
+docs = [
+    "mkdocs>=1.5.3",
+    "mkdocs-material>=9.5.0",
+    "mkdocs-mermaid2-plugin>=1.1.1",
+]
+gpu = [
+    "torch>=2.2.0",
+    "torchvision>=0.17.0",
+    "torchaudio>=2.2.0",
+    "nvidia-ml-py>=12.535.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/adrianosancarneiro/TA_V8"
+Repository = "https://github.com/adrianosancarneiro/TA_V8"
+Documentation = "https://github.com/adrianosancarneiro/TA_V8/wiki"
+Issues = "https://github.com/adrianosancarneiro/TA_V8/issues"
+
+[project.scripts]
+ta-setup = "ta_v8.scripts.setup:main"
+ta-health = "ta_v8.scripts.health:main"
+
+[tool.hatch.version]
+path = "ta_v8/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["ta_v8"]
+
+[tool.black]
+line-length = 88
+target-version = ['py311']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 88
+known_first_party = ["ta_v8"]
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -q --strict-markers --strict-config"
+testpaths = [
+    "tests",
+]
+python_files = [
+    "test_*.py",
+    "*_test.py",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+]
+
+[tool.coverage.run]
+source = ["ta_v8"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+[[tool.mypy.overrides]]
+module = [
+    "qdrant_client.*",
+    "neo4j.*",
+    "docker.*",
+    "kubernetes.*",
+]
+ignore_missing_imports = true

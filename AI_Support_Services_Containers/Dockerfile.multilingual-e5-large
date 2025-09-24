@@ -1,0 +1,137 @@
+# Use NVIDIA PyTorch base image with CUDA support
+FROM nvcr.io/nvidia/pytorch:24.03-py3
+
+WORKDIR /app
+
+# Install dependencies
+RUN pip install --no-cache-dir \
+    sentence-transformers==3.0.1 \
+    fastapi==0.104.1 \
+    uvicorn[standard]==0.24.0 \
+    pydantic==2.5.0
+
+# Create the Python application inline
+RUN cat > /app/app.py << 'EOF'
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from typing import List
+from sentence_transformers import SentenceTransformer
+import uvicorn
+import torch
+import warnings
+
+# Suppress warnings
+warnings.filterwarnings("ignore", category=UserWarning)
+
+app = FastAPI(title="Multilingual E5 Large Embedding Service")
+model = None
+
+class EmbeddingRequest(BaseModel):
+    texts: List[str]
+    max_length: int = 514
+
+@app.on_event("startup")
+async def load_model():
+    global model
+    print("Loading multilingual-e5-large model...")
+    
+    # Check for CUDA availability and use GPU if available
+    if torch.cuda.is_available():
+        device = "cuda"
+        print(f"CUDA is available. GPU: {torch.cuda.get_device_name(0)}")
+        print(f"CUDA Version: {torch.version.cuda}")
+        print(f"PyTorch Version: {torch.__version__}")
+    else:
+        device = "cpu"
+        print("CUDA not available, using CPU")
+    
+    print(f"Using device: {device}")
+    
+    try:
+        model = SentenceTransformer("intfloat/multilingual-e5-large", device=device)
+        print(f"Model loaded successfully on {device}")
+    except Exception as e:
+        print(f"Error loading model on {device}: {e}")
+        # Fallback to CPU if GPU fails
+        if device == "cuda":
+            print("Falling back to CPU...")
+            try:
+                model = SentenceTransformer("intfloat/multilingual-e5-large", device="cpu")
+                print("Model loaded successfully on CPU (fallback)")
+            except Exception as cpu_e:
+                print(f"Failed to load on CPU too: {cpu_e}")
+                raise
+        else:
+            raise
+
+@app.get("/health")
+async def health():
+    device = "unknown"
+    if model:
+        if hasattr(model, 'device'):
+            device = str(model.device)
+        elif hasattr(model, '_target_device'):
+            device = str(model._target_device)
+    
+    return {
+        "status": "healthy", 
+        "model": "multilingual-e5-large", 
+        "dimensions": 1024,
+        "device": device,
+        "cuda_available": torch.cuda.is_available(),
+        "gpu_name": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None
+    }
+
+@app.post("/embeddings")
+async def create_embeddings(request: EmbeddingRequest):
+    if not model:
+        raise HTTPException(503, "Model not loaded")
+    
+    try:
+        # E5 models work best with prefixes for queries
+        prefixed_texts = ["query: " + text for text in request.texts]
+        embeddings = model.encode(
+            prefixed_texts, 
+            normalize_embeddings=True,
+            show_progress_bar=False
+        )
+        
+        return {
+            "embeddings": embeddings.tolist(),
+            "model": "multilingual-e5-large",
+            "dimensions": 1024
+        }
+    except Exception as e:
+        print(f"Error generating embeddings: {e}")
+        raise HTTPException(500, f"Error generating embeddings: {str(e)}")
+
+@app.get("/")
+async def root():
+    return {
+        "message": "Multilingual E5 Large Embedding Service",
+        "model": "intfloat/multilingual-e5-large",
+        "endpoints": [
+            {"path": "/", "method": "GET", "description": "Service information"},
+            {"path": "/health", "method": "GET", "description": "Health check with device info"},
+            {"path": "/embeddings", "method": "POST", "description": "Generate embeddings for provided texts"}
+        ]
+    }
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8080)
+EOF
+
+# Expose port
+EXPOSE 8080
+
+# Set environment variables for optimal performance
+ENV OMP_NUM_THREADS=4
+ENV TOKENIZERS_PARALLELISM=false
+ENV TRANSFORMERS_OFFLINE=0
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=300s --retries=5 \
+    CMD curl -f http://localhost:8080/health || exit 1
+
+# Start the service
+CMD ["python", "/app/app.py"]
