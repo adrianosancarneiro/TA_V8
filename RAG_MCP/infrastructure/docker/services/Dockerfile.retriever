@@ -1,0 +1,55 @@
+FROM python:3.11-slim
+
+# =============================================================================
+# DOCKERFILE: RETRIEVAL MCP SERVICE
+# =============================================================================
+# Purpose: Containerized semantic retrieval service for TA_V8 RAG system
+# Port: 8003
+# Integration: TAO ToolRegistry, TAE ToolCaller, TAB workflows
+# Dependencies: Qdrant vector database, PostgreSQL, Embedding MCP service
+# 
+# Build Context: Run from /home/mentorius/AI_Services/TA_V8/RAG_MCP/
+# Build Command: docker build -f infrastructure/docker/services/Dockerfile.retriever -t ta_v8_retrieval_mcp .
+# Run Command: docker run -p 8003:8003 --env-file .env ta_v8_retrieval_mcp
+# =============================================================================
+
+WORKDIR /app
+
+# Install system dependencies for compilation and health checks
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies optimized for MCP retrieval service
+RUN pip install --no-cache-dir \
+    fastapi \
+    uvicorn[standard] \
+    pydantic \
+    asyncpg \
+    qdrant-client \
+    httpx \
+    numpy \
+    prometheus-client
+
+# Create necessary directories for logging and temporary files
+RUN mkdir -p /app/logs /app/temp
+
+# Copy retrieval service files (will be available when built from RAG_MCP root)
+COPY mcp_services/retrieval/server.py /app/main.py
+COPY mcp_services/shared/ /app/shared/
+
+# Set Python path for imports
+ENV PYTHONPATH=/app
+
+# Expose retrieval MCP service port
+EXPOSE 8003
+
+# Health check for container orchestration and monitoring
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8003/health || exit 1
+
+# Run the retrieval MCP server
+# Note: server.py is copied as main.py for consistency with original setup
+CMD ["python", "/app/main.py"]

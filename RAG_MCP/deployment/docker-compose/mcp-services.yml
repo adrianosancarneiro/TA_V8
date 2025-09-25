@@ -1,0 +1,263 @@
+version: '3.8'
+
+services:
+  # Chunking MCP Server
+  chunking-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile.chunking
+    container_name: ta_v8_chunking_mcp
+    ports:
+      - "8001:8001"
+    environment:
+      # PostgreSQL
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: postgres_user
+      POSTGRES_PASSWORD: postgres_pass
+      POSTGRES_DATABASE: ta_v8
+      # Neo4j
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: neo4j_password
+      # MinIO
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      # MCP Mode
+      MCP_TRANSPORT_MODE: http
+    depends_on:
+      postgres:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - ta_v8_network
+    volumes:
+      - ./chunking_mcp_server.py:/app/main.py
+    command: python /app/main.py
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Embedding MCP Server
+  embedding-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile.embedding_mcp
+    container_name: ta_v8_embedding_mcp
+    ports:
+      - "8002:8002"
+    environment:
+      # PostgreSQL
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: postgres_user
+      POSTGRES_PASSWORD: postgres_pass
+      POSTGRES_DATABASE: ta_v8
+      # Qdrant
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: 6333
+      # Embedding Service
+      EMBEDDING_URL: http://multilingual-e5-large:8080
+      # MCP Mode
+      MCP_TRANSPORT_MODE: http
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      multilingual-e5-large:
+        condition: service_healthy
+    networks:
+      - ta_v8_network
+    volumes:
+      - ./embedding_mcp_server.py:/app/main.py
+    command: python /app/main.py
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Retriever MCP Server
+  retriever-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile.retriever
+    container_name: ta_v8_retriever_mcp
+    ports:
+      - "8003:8003"
+    environment:
+      # PostgreSQL
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: postgres_user
+      POSTGRES_PASSWORD: postgres_pass
+      POSTGRES_DATABASE: ta_v8
+      # Qdrant
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: 6333
+      # Embedding MCP URL
+      EMBEDDING_MCP_URL: http://embedding-mcp:8002
+      # MCP Mode
+      MCP_TRANSPORT_MODE: http
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      embedding-mcp:
+        condition: service_healthy
+    networks:
+      - ta_v8_network
+    volumes:
+      - ./retriever_mcp_server.py:/app/main.py
+    command: python /app/main.py
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Existing services from your infrastructure
+  postgres:
+    image: postgres:15
+    container_name: ta_v8_postgres
+    environment:
+      POSTGRES_USER: postgres_user
+      POSTGRES_PASSWORD: postgres_pass
+      POSTGRES_DB: ta_v8
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgresql_schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    networks:
+      - ta_v8_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  neo4j:
+    image: neo4j:5
+    container_name: ta_v8_neo4j
+    environment:
+      NEO4J_AUTH: neo4j/neo4j_password
+      NEO4J_PLUGINS: '["apoc", "graph-data-science"]'
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+      - ./neo4j_schema.cypher:/var/lib/neo4j/import/schema.cypher
+    networks:
+      - ta_v8_network
+    healthcheck:
+      test: ["CMD", "neo4j", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: ta_v8_qdrant
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks:
+      - ta_v8_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    container_name: ta_v8_minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - ta_v8_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # Embedding model service (BGE-M3)
+  multilingual-e5-large:
+    image: ghcr.io/huggingface/text-embeddings-inference:1.2
+    container_name: ta_v8_embedding_model
+    environment:
+      MODEL_ID: intfloat/multilingual-e5-large
+      REVISION: main
+      MAX_BATCH_TOKENS: 16384
+    ports:
+      - "8080:80"
+    networks:
+      - ta_v8_network
+    volumes:
+      - embedding_cache:/data
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # Ollama for LLM (for tag generation)
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ta_v8_ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - ta_v8_network
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+networks:
+  ta_v8_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  neo4j_data:
+  neo4j_logs:
+  qdrant_data:
+  minio_data:
+  ollama_data:
+  embedding_cache:

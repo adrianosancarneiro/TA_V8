@@ -81,25 +81,32 @@ class Config:
         # Load secrets on initialization
         setup_environment()
     
-    # Database Configuration
-    POSTGRES_HOST = get_env_var("POSTGRES_HOST", "localhost")
+    # Database Configuration - using Docker service names
+    POSTGRES_HOST = get_env_var("POSTGRES_HOST", "postgres")
     POSTGRES_PORT = int(get_env_var("POSTGRES_PORT", "5432"))
-    POSTGRES_USER = get_env_var("POSTGRES_USER", "postgres")
-    POSTGRES_PASSWORD = get_env_var("POSTGRES_PASSWORD", "")
+    POSTGRES_USER = get_env_var("POSTGRES_USER", "postgres_user")
+    POSTGRES_PASSWORD = get_env_var("POSTGRES_PASSWORD", "postgres_pass")
     POSTGRES_DB = get_env_var("POSTGRES_DB", "ta_v8")
+    POSTGRES_DATABASE = POSTGRES_DB  # Compatibility alias
     
-    # Vector Database Configuration
-    QDRANT_HOST = get_env_var("QDRANT_HOST", "localhost")
+    # Vector Database Configuration - using Docker service names
+    QDRANT_HOST = get_env_var("QDRANT_HOST", "qdrant")
     QDRANT_PORT = int(get_env_var("QDRANT_PORT", "6333"))
     QDRANT_API_KEY = get_env_var("QDRANT_API_KEY", "")
     
-    # Embedding Service Configuration
-    EMBEDDING_URL = get_env_var("EMBEDDING_URL", "http://localhost:8080")
+    # Embedding Service Configuration - using Docker service names
+    EMBEDDING_URL = get_env_var("EMBEDDING_URL", "http://multilingual-e5-large:8080")
     EMBEDDING_API_KEY = get_env_var("EMBEDDING_API_KEY", "")
     
-    # LLM Configuration
-    OLLAMA_URL = get_env_var("OLLAMA_URL", "http://localhost:11434")
+    # LLM Configuration - using Docker service names
+    OLLAMA_URL = get_env_var("OLLAMA_URL", "http://ta_v8_ollama:11434")
     OLLAMA_API_KEY = get_env_var("OLLAMA_API_KEY", "")
+    
+    # MinIO Configuration (Object Storage) - using Docker service names
+    MINIO_ENDPOINT = get_env_var("MINIO_ENDPOINT", "minio:9000")
+    MINIO_ACCESS_KEY = get_env_var("MINIO_ACCESS_KEY", "minioadmin")
+    MINIO_SECRET_KEY = get_env_var("MINIO_SECRET_KEY", "minioadmin")
+    MINIO_BUCKET = get_env_var("MINIO_BUCKET", "ta-v8-documents")
     
     # MCP Configuration
     MCP_SECRET_KEY = get_env_var("MCP_SECRET_KEY", "")
