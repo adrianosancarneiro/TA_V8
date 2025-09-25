@@ -125,6 +125,44 @@ services:
           cpus: '2'
           memory: 4G
 
+  # RAG Agent Team Orchestrator
+  rag-agent-team:
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/Dockerfile.agent_team
+    container_name: ta_v8_rag_agent_team
+    ports:
+      - "8006:8006"
+    environment:
+      # MCP Services connections
+      CHUNKING_MCP_URL: http://chunking-mcp:8001
+      EMBEDDING_MCP_URL: http://embedding-mcp:8002
+      RETRIEVAL_MCP_URL: http://retrieval-mcp:8003
+      # Ollama connection
+      OLLAMA_URL: http://ta_v8_ollama:11434
+      # Configuration
+      MCP_TRANSPORT_MODE: http
+      AGENT_TEAM_SERVICE_NAME: rag_agent_team_v1
+    depends_on:
+      - chunking-mcp
+      - embedding-mcp  
+      - retrieval-mcp
+      - ta_v8_ollama
+    networks:
+      - ta_v8_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8006/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+
 # ============ NETWORKS ============
 networks:
   ta_v8_network:

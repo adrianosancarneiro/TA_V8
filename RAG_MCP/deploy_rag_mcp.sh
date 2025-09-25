@@ -199,6 +199,7 @@ show_status() {
     echo "🔗 Chunking MCP:    http://localhost:8001"
     echo "🔗 Embedding MCP:   http://localhost:8002"  
     echo "🔗 Retrieval MCP:   http://localhost:8003"
+    echo "🔗 RAG Agent Team:  http://localhost:8006"
 }
 
 run_tests() {
