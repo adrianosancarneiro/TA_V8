@@ -39,4 +39,4 @@ ENV VIRTUAL_ENV="/app/.venv"
 RUN apt-get update && apt-get install -y bash && rm -rf /var/lib/apt/lists/*
 
 # Default command (can be overridden in docker-compose)
-CMD ["bash", "-c", "source /app/.venv/bin/activate && uvicorn unified_mcp_server:app --host 0.0.0.0 --port 8000"]
+CMD ["bash", "-c", "source /app/.venv/bin/activate && uvicorn rag_agent_team:app --host 0.0.0.0 --port 8000"]

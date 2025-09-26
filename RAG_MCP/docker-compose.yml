@@ -2,41 +2,27 @@
 version: '3.8'
 
 services:
-  rag-mcp-unified:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: ta_v8_rag_mcp_unified
-    command: uv run uvicorn unified_mcp_server:app --host 0.0.0.0 --port 8000 --reload
-    environment:
-      - PYTHONPATH=/app
-      - UV_PYTHON_INSTALL_DIR=/app/.venv
-      - PATH=/app/.venv/bin:$PATH
-    env_file:
-      - /etc/TA_V8/RAG_MCP/secrets.env
-    ports:
-      - "8005:8000"
-    volumes:
-      - .:/app
-    networks:
-      - ta_v8_default
-    depends_on:
-      - rag-agent-team
-
+  # Main critic-driven RAG agent team service
   rag-agent-team:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: ta_v8_rag_agent_team
-    command: uv run uvicorn rag_agent_team:app --host 0.0.0.0 --port 8001 --reload
+    command: uv run uvicorn rag_agent_team:app --host 0.0.0.0 --port 8000 --reload
     environment:
       - PYTHONPATH=/app
       - UV_PYTHON_INSTALL_DIR=/app/.venv
       - PATH=/app/.venv/bin:$PATH
+      # MCP service endpoints
+      - CHUNKING_MCP_URL=http://chunking-mcp:8001
+      - EMBEDDING_MCP_URL=http://embedding-mcp:8002  
+      - RETRIEVAL_MCP_URL=http://retriever-mcp:8003
+      - OLLAMA_URL=http://ta_v8_ollama:11434
+      - DEFAULT_LLM=llama3.2:latest
     env_file:
       - /etc/TA_V8/RAG_MCP/secrets.env
     ports:
-      - "8006:8001"
+      - "8006:8000"  # Main RAG agent team API
     volumes:
       - .:/app
     networks:

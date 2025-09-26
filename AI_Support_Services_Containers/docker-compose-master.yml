@@ -22,6 +22,8 @@ services:
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
       - ./backups:/backups
+    networks:
+      - ta_v8_network
     restart: unless-stopped
     deploy:
       resources:
@@ -53,6 +55,8 @@ services:
       QDRANT__STORAGE__OPTIMIZERS__MEMMAP_THRESHOLD_KB: 100000
       QDRANT__SERVICE__MAX_REQUEST_SIZE_MB: 256
       QDRANT__SERVICE__GRPC_MAX_RECEIVE_MESSAGE_LENGTH: 268435456
+    networks:
+      - ta_v8_network
     restart: unless-stopped
     deploy:
       resources:
@@ -70,7 +74,7 @@ services:
   # ============ GRAPH DATABASE (Memory-Optimized) ============
   neo4j:
     build:
-      context: ./neo4j
+      context: .
       dockerfile: Dockerfile.neo4j
     container_name: neo4j
     ports:
@@ -79,8 +83,8 @@ services:
     volumes:
       - ./data/neo4j:/data
       - ./data/neo4j/logs:/logs
-      - ./neo4j/import:/var/lib/neo4j/import
-      - ./neo4j/plugins:/plugins
+      - ./data/neo4j/import:/var/lib/neo4j/import
+      - ./data/neo4j/plugins:/plugins
     environment:
       NEO4J_AUTH: neo4j/pJnssz3khcLtn6T
       NEO4J_PLUGINS: '["apoc"]'
@@ -100,6 +104,8 @@ services:
       NEO4J_dbms_query__cache__size: 100
       # Disable strict validation to avoid startup errors
       NEO4J_server_config_strict__validation_enabled: "false"
+    networks:
+      - ta_v8_network
     restart: unless-stopped
     deploy:
       resources:
@@ -129,6 +135,8 @@ services:
       MINIO_API_REQUESTS_MAX: 10000
     volumes:
       - ./data/minio:/data
+    networks:
+      - ta_v8_network
     command: server --console-address ":9001" /data
     restart: unless-stopped
     deploy:
@@ -175,6 +183,8 @@ services:
     volumes:
       - ./models/ollama:/root/.ollama
       - ./scripts/ollama-init.sh:/scripts/ollama-init.sh:ro
+    networks:
+      - ta_v8_network
     entrypoint: ["/bin/sh", "-c"]
     command: ["/scripts/ollama-init.sh & /bin/ollama serve"]
     deploy:
@@ -188,7 +198,7 @@ services:
           memory: 56G   # Optimized: 88% of 64GB RAM (8GB reserved for system)
           cpus: '16'    # Use 16 of 24 cores for better parallel processing
     healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:11434/api/version"]
+      test: ["CMD", "curl", "-sf", "http://localhost:11434/"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -197,7 +207,7 @@ services:
   # ============ EMBEDDING SERVICE (GPU-Optimized) ============
   multilingual-e5-large:
     build:
-      context: ./multilingual-e5-large
+      context: .
       dockerfile: Dockerfile.multilingual-e5-large
     container_name: multilingual-e5-large
     ports:
@@ -206,6 +216,8 @@ services:
       OMP_NUM_THREADS: 4
       TOKENIZERS_PARALLELISM: "false"
       TRANSFORMERS_OFFLINE: "0"
+    networks:
+      - ta_v8_network
     deploy:
       resources:
         reservations:
@@ -224,7 +236,5 @@ services:
       start_period: 300s
 
 networks:
-  default:
-    driver: bridge
-    driver_opts:
-      com.docker.network.driver.mtu: 1500
+  ta_v8_network:
+    external: true
