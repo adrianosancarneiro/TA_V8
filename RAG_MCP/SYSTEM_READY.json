@@ -1,0 +1,77 @@
+{
+  "system_prepared_at": "2025-09-26T15:01:56.894580",
+  "first_tenant": {
+    "tenant_id": "demo_org",
+    "name": "Demo Organization",
+    "display_name": "Demo Organization - AI Knowledge System",
+    "industry": "Technology Demonstration",
+    "subscription_tier": "enterprise",
+    "api_rate_limit": 10000,
+    "storage_quota_gb": 1000,
+    "max_users": 100,
+    "default_embedding_model": "multilingual-e5-large",
+    "default_chunking_method": "auto",
+    "default_chunk_size": 512,
+    "metadata": {
+      "setup_date": "2025-09-26T15:01:56.772001",
+      "demo_purpose": "stakeholder_demo",
+      "clean_install": true
+    }
+  },
+  "default_domain": {
+    "domain_id": "knowledge_base",
+    "name": "Knowledge Base",
+    "display_name": "Organizational Knowledge Base",
+    "domain_type": "KnowledgeRepository",
+    "domain_category": "Information",
+    "path": "/knowledge_base",
+    "level": 0,
+    "attributes": {
+      "description": "Central repository for organizational knowledge",
+      "content_types": [
+        "documents",
+        "procedures",
+        "policies",
+        "guides"
+      ],
+      "access_level": "all_users"
+    },
+    "knowledge_sources": [
+      "documents",
+      "uploads",
+      "manual_entry"
+    ],
+    "indexing_frequency": "immediate",
+    "retention_days": 365
+  },
+  "system_status": "ready_for_demo",
+  "next_steps": [
+    "Add your documents using the chunking service",
+    "Documents will be automatically embedded and indexed",
+    "Use the RAG Agent Team for intelligent question answering",
+    "Monitor progress via health endpoints"
+  ],
+  "api_endpoints": {
+    "chunk_documents": "POST http://localhost:8001/mcp/execute",
+    "embed_content": "POST http://localhost:8012/mcp/execute",
+    "retrieve_info": "POST http://localhost:8003/mcp/execute",
+    "agent_query": "POST http://localhost:8006/query",
+    "system_health": "GET http://localhost:8006/health"
+  },
+  "example_document_upload": {
+    "endpoint": "POST http://localhost:8001/mcp/execute",
+    "payload": {
+      "tenant_id": "demo_org",
+      "domain_id": "knowledge_base",
+      "source": {
+        "type": "text",
+        "text": "Your document content here..."
+      },
+      "policy": {
+        "method": "auto",
+        "target_tokens": 512,
+        "overlap": 64
+      }
+    }
+  }
+}

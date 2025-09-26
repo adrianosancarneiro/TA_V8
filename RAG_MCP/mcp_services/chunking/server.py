@@ -114,7 +114,8 @@ class ChunkingService:
             password=os.getenv("POSTGRES_PASSWORD", "postgres_pass"),
             database=os.getenv("POSTGRES_DATABASE", "ta_v8"),
             min_size=1,
-            max_size=10
+            max_size=10,
+            server_settings={"search_path": "rag_system, public"}
         )
         
         # Neo4j connection for relationship tracking
@@ -305,31 +306,41 @@ class ChunkingService:
     async def _store_chunks_postgresql(self, chunk_records: List[ChunkRecord], document_id: str, request: MCPChunkRequest):
         """Store chunk records in PostgreSQL database"""
         async with self.pg_pool.acquire() as conn:
-            # Store document record
+            # Store document record using comprehensive schema
             await conn.execute("""
                 INSERT INTO rag_system.documents 
-                (document_id, tenant_id, domain_id, status, metadata, created_at, updated_at)
-                VALUES ($1, $2, $3, 'completed', $4, $5, $5)
+                (document_id, tenant_id, domain_id, title, content_type, full_text,
+                 chunking_method, status, document_tags, created_at, updated_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, 'completed', $8, $9, $9)
                 ON CONFLICT (document_id) DO UPDATE SET 
                     status = 'completed',
-                    updated_at = $5
-            """, document_id, request.tenant_id, request.domain_id, 
+                    full_text = EXCLUDED.full_text,
+                    document_tags = EXCLUDED.document_tags,
+                    updated_at = $9
+            """, document_id, request.tenant_id, request.domain_id,
+                f"Document {document_id[:8]}...", request.source.type,
+                request.source.text, request.policy.method, 
                 json.dumps(request.metadata), datetime.now())
             
-            # Store chunk records
+            # Store chunk records using comprehensive schema
             for chunk in chunk_records:
                 await conn.execute("""
                     INSERT INTO rag_system.chunks 
-                    (chunk_id, document_id, tenant_id, domain_id, chunk_text, chunk_index, 
-                     token_count, status, metadata, created_at, updated_at)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, 'embedded', $8, $9, $9)
-                    ON CONFLICT (chunk_id) DO UPDATE SET 
-                        chunk_text = $5,
-                        status = 'embedded',
-                        updated_at = $9
+                    (chunk_id, document_id, tenant_id, domain_id, chunk_index,
+                     chunk_text, chunk_text_with_overlap, token_count, char_count,
+                     method, chunk_tags, embedding_status, created_at)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'pending', $12)
+                    ON CONFLICT (document_id, chunk_index) DO UPDATE SET 
+                        chunk_text = EXCLUDED.chunk_text,
+                        chunk_text_with_overlap = EXCLUDED.chunk_text_with_overlap,
+                        token_count = EXCLUDED.token_count,
+                        char_count = EXCLUDED.char_count,
+                        chunk_tags = EXCLUDED.chunk_tags,
+                        embedding_status = 'pending'
                 """, chunk.chunk_id, document_id, request.tenant_id, request.domain_id,
-                    chunk.text, chunk.metadata["chunk_index"], chunk.metadata["token_count"],
-                    json.dumps(chunk.metadata), datetime.now())
+                    chunk.metadata["chunk_index"], chunk.text, chunk.text,
+                    chunk.metadata["token_count"], len(chunk.text),
+                    request.policy.method, json.dumps(chunk.metadata), datetime.now())
     
     async def _update_neo4j_relationships(self, document_id: str, chunk_records: List[ChunkRecord], request: MCPChunkRequest):
         """Update Neo4j graph relationships for document and chunks"""

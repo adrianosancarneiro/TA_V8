@@ -699,24 +699,41 @@ OUTPUT FORMAT:
         """Execute retriever agent via MCP service"""
         try:
             retrieval_request = {
-                "query": state.query,
-                "max_results": 10,
-                "threshold": 0.7,
-                "include_metadata": True
+                "tenant_id": state.tenant_id,
+                "collection": "knowledge_base",
+                "query": {
+                    "text": state.query,
+                    "use_embedding": True
+                },
+                "top_k": 10,
+                "filters": {}
             }
             
             logger.info(f"🔍 Retriever executing: '{state.query}'")
             
             response = await self.http_client.post(
-                f"{self.retrieval_mcp_url}/retrieve",
+                f"{self.retrieval_mcp_url}/mcp/execute",
                 json=retrieval_request,
                 timeout=30.0
             )
 
             if response.status_code == 200:
                 result = response.json()
-                logger.info(f"✅ Retrieved {len(result.get('sources', []))} sources")
-                return result
+                hits = result.get("hits", [])
+                sources = []
+                
+                for hit in hits:
+                    source = {
+                        "id": hit.get("id", ""),
+                        "text": hit.get("text", ""),
+                        "score": hit.get("score", 0),
+                        "metadata": hit.get("metadata", {}),
+                        "retrieval_timestamp": datetime.utcnow().isoformat()
+                    }
+                    sources.append(source)
+                
+                logger.info(f"✅ Retrieved {len(sources)} sources")
+                return {"sources": sources}
             else:
                 logger.error(f"❌ Retrieval failed: {response.status_code}")
                 return None
@@ -888,290 +905,10 @@ Generate the final comprehensive answer."""
             logger.error(f"❌ Refiner agent ({mode}) error: {str(e)}")
             return None
     
-    async def _analyze_query(self, query: str, context: Dict[str, Any]) -> Dict[str, Any]:
-        """Analyze query to determine optimal processing strategy"""
-        query_lower = query.lower()
-        word_count = len(query.split())
-        
-        # Determine query type based on patterns
-        if any(word in query_lower for word in ["what", "who", "when", "where", "which"]):
-            query_type = "factual"
-        elif any(word in query_lower for word in ["how", "why", "explain", "describe"]):
-            query_type = "analytical" 
-        elif any(word in query_lower for word in ["compare", "contrast", "difference", "versus"]):
-            query_type = "comparative"
-        elif "?" not in query and word_count > 10:
-            query_type = "open_ended"
-        else:
-            query_type = "general"
-        
-        # Assess query complexity
-        complexity = "simple"
-        if word_count > 20 or len(query) > 200:
-            complexity = "complex"
-        elif word_count > 10 or len(query) > 100:
-            complexity = "medium"
-        
-        return {
-            "query_type": query_type,
-            "complexity": complexity,
-            "word_count": word_count,
-            "character_count": len(query),
-            "has_question_mark": "?" in query,
-            "context_provided": bool(context),
-            "processing_strategy": f"{query_type}_{complexity}",
-            "estimated_sources_needed": min(10, max(3, word_count // 5))
-        }
-    
-    async def _execute_agent(self, agent_name: str, query: str, tenant_id: str, context: Dict[str, Any]) -> AgentResponse:
-        """Execute a specific agent with comprehensive error handling and monitoring"""
-        start_time = asyncio.get_event_loop().time()
-        
-        if agent_name not in self.agents:
-            raise ValueError(f"Unknown agent: {agent_name}")
-        
-        agent = self.agents[agent_name]
-        logger.info(f"🤖 Executing {agent.name} for tenant: {tenant_id}")
-        
-        try:
-            agent_context = {
-                "query": query,
-                "tenant_id": tenant_id,
-                "agent_capabilities": agent.capabilities or {},
-                **context
-            }
-            
-            # Execute agent based on its specialization
-            if agent_name == "retrieval":
-                result = await self._execute_retrieval_agent(agent, agent_context)
-            elif agent_name == "refiner":
-                result = await self._execute_refiner_agent(agent, agent_context)
-            elif agent_name == "response":
-                result = await self._execute_response_agent(agent, agent_context)
-            else:
-                raise ValueError(f"No execution handler for agent: {agent_name}")
-            
-            processing_time = asyncio.get_event_loop().time() - start_time
-            logger.info(f"✅ {agent.name} completed in {processing_time:.2f}s")
-            
-            return AgentResponse(
-                success=True,
-                agent_name=agent.name,
-                response_data=result,
-                metadata={
-                    "agent_type": agent_name,
-                    "processing_time": processing_time,
-                    "context_size": len(str(context)),
-                    "tenant_id": tenant_id
-                },
-                sources=result.get("sources", []),
-                processing_time=processing_time
-            )
-            
-        except Exception as e:
-            processing_time = asyncio.get_event_loop().time() - start_time
-            logger.error(f"❌ {agent.name} failed after {processing_time:.2f}s: {str(e)}")
-            
-            return AgentResponse(
-                success=False,
-                agent_name=agent.name,
-                response_data={"error": str(e)},
-                metadata={
-                    "agent_type": agent_name,
-                    "processing_time": processing_time,
-                    "error": str(e),
-                    "tenant_id": tenant_id
-                },
-                sources=[],
-                processing_time=processing_time
-            )
-    
-    async def _execute_retrieval_agent(self, agent: Agent, context: Dict[str, Any]) -> Dict[str, Any]:
-        """Execute retrieval agent using MCP retrieval service"""
-        query = context["query"]
-        tenant_id = context["tenant_id"]
-        max_results = context.get("max_results", 5)
-        
-        try:
-            # Call the retrieval MCP service
-            response = await self.http_client.post(
-                f"{self.retrieval_mcp_url}/mcp/execute",
-                json={
-                    "method": "retrieve",
-                    "params": {
-                        "query": query,
-                        "tenant_id": tenant_id,
-                        "top_k": max_results
-                    }
-                },
-                timeout=30.0
-            )
-            response.raise_for_status()
-            
-            retrieval_data = response.json()
-            if retrieval_data.get("success") and retrieval_data.get("result"):
-                results = retrieval_data["result"].get("results", [])
-                sources = []
-                
-                for result in results:
-                    source = {
-                        "id": result.get("id", ""),
-                        "text": result.get("text", ""),
-                        "score": result.get("score", 0),
-                        "metadata": result.get("metadata", {}),
-                        "retrieval_timestamp": datetime.utcnow().isoformat()
-                    }
-                    sources.append(source)
-                
-                return {
-                    "retrieved_info": [source["text"] for source in sources],
-                    "sources": sources,
-                    "total_results_found": len(results),
-                    "retrieval_method": "mcp_service"
-                }
-            else:
-                logger.warning("No results from retrieval MCP service")
-                return {
-                    "retrieved_info": [],
-                    "sources": [],
-                    "total_results_found": 0,
-                    "retrieval_method": "mcp_service",
-                    "warning": "No results found"
-                }
-                
-        except Exception as e:
-            logger.error(f"❌ Retrieval MCP service failed: {str(e)}")
-            return {
-                "retrieved_info": [],
-                "sources": [],
-                "total_results_found": 0,
-                "error": str(e)
-            }
-    
-    async def _execute_refiner_agent(self, agent: Agent, context: Dict[str, Any]) -> Dict[str, Any]:
-        """Execute refiner agent for information synthesis"""
-        retrieved_info = context.get("retrieved_info", [])
-        sources = context.get("sources", [])
-        query = context["query"]
-        
-        if not retrieved_info:
-            return {
-                "refined_info": "",
-                "sources": sources,
-                "refinement_applied": False
-            }
-        
-        # Combine information from multiple sources
-        combined_text = "\n\n".join(retrieved_info)
-        
-        # Use LLM to synthesize and refine information
-        refinement_prompt = f"""
-{agent.system_prompt}
+    # All agent execution is now handled by the critic-driven system above
+    # The _execute_retriever_agent, _execute_critic_agent, and _execute_refiner_agent methods
+    # implement the modern multi-agent approach with iterative improvement
 
-Original Query: {query}
-
-Retrieved Information:
-{combined_text}
-
-Your task is to synthesize this information into a coherent, comprehensive response that:
-1. Directly addresses the user's query
-2. Integrates information from multiple sources
-3. Resolves any conflicts between sources
-4. Adds relevant context where helpful
-5. Maintains accuracy and proper attribution
-
-Provide a well-structured synthesis that enhances the retrieved information.
-"""
-        
-        try:
-            refined_response = await self._generate_llm_response(refinement_prompt)
-            
-            return {
-                "refined_info": refined_response,
-                "sources": sources,
-                "original_sources_count": len(sources),
-                "refinement_applied": True,
-                "synthesis_method": "llm_enhanced"
-            }
-            
-        except Exception as e:
-            logger.warning(f"⚠️ LLM refinement failed, using simple combination: {str(e)}")
-            
-            return {
-                "refined_info": combined_text,
-                "sources": sources,
-                "refinement_applied": False,
-                "fallback_used": True,
-                "error": str(e)
-            }
-    
-    async def _execute_response_agent(self, agent: Agent, context: Dict[str, Any]) -> Dict[str, Any]:
-        """Execute response agent for final response generation"""
-        refined_info = context.get("refined_info", "")
-        sources = context.get("sources", [])
-        query = context["query"]
-        include_sources = context.get("include_sources", True)
-        
-        response_prompt = f"""
-{agent.system_prompt}
-
-User Query: {query}
-
-Information to base your response on:
-{refined_info}
-
-Sources Available: {len(sources)} sources
-
-Your task is to generate a comprehensive, professional response that:
-1. Directly and completely answers the user's question
-2. Uses clear, accessible language appropriate for the context
-3. Provides sufficient detail without being overwhelming
-4. Includes proper citations if sources should be included: {include_sources}
-5. Maintains accuracy based on the provided information
-
-Generate a well-structured, informative response.
-"""
-        
-        try:
-            final_response = await self._generate_llm_response(response_prompt)
-            
-            # Format sources for citation if requested
-            formatted_sources = []
-            if include_sources and sources:
-                for i, source in enumerate(sources, 1):
-                    formatted_source = {
-                        "citation_id": i,
-                        "text_snippet": source["text"][:200] + "..." if len(source["text"]) > 200 else source["text"],
-                        "similarity_score": source.get("score", 0),
-                        "source_id": source.get("id", ""),
-                        "metadata": source.get("metadata", {})
-                    }
-                    formatted_sources.append(formatted_source)
-            
-            return {
-                "generated_response": final_response,
-                "sources": formatted_sources,
-                "response_length": len(final_response),
-                "sources_cited": len(formatted_sources),
-                "generation_method": "llm_generated"
-            }
-            
-        except Exception as e:
-            logger.error(f"❌ Response generation failed: {str(e)}")
-            
-            fallback_response = f"""Based on the available information, here's what I found regarding your query: {query}
-
-{refined_info[:1000]}...
-
-Note: This is a simplified response due to processing limitations. Please try your query again for a more comprehensive answer."""
-            
-            return {
-                "generated_response": fallback_response,
-                "sources": sources if include_sources else [],
-                "fallback_used": True,
-                "error": str(e)
-            }
-    
     async def _generate_llm_response(self, prompt: str) -> str:
         """Generate response using Ollama LLM service"""
         try:
@@ -1233,6 +970,21 @@ Note: This is a simplified response due to processing limitations. Please try yo
             session["conversation_history"] = session["conversation_history"][-10:]
         
         logger.info(f"💬 Updated session {session_id}: {session['query_count']} queries")
+
+    def _extract_sources_from_state(self, state: ConversationState) -> List[Dict[str, Any]]:
+        """Extract and format sources from conversation state"""
+        sources = []
+        for source_info in state.retrieved_info:
+            if isinstance(source_info, dict):
+                # Extract source information with proper formatting
+                source = {
+                    "id": source_info.get("id", ""),
+                    "text": source_info.get("text", ""),
+                    "similarity_score": source_info.get("score", 0.0),
+                    "metadata": source_info.get("metadata", {})
+                }
+                sources.append(source)
+        return sources
 
 # Create global agent team instance
 agent_team = RAGAgentTeam()

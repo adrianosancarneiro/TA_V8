@@ -72,20 +72,20 @@ class MCPRetrieveResponse(BaseModel):
 
 class RetrievalService:
     """
-    Core retrieval service with complete semantic search capabilities
+    Core retrieval service with semantic search capabilities
     
     Features:
     - Multi-tenant vector search across collections
-    - Hybrid semantic + metadata filtering
+    - Semantic search with embedding models
     - Inter-service communication with Embedding MCP
-    - PostgreSQL text retrieval with vector similarity
+    - Qdrant vector similarity search only
     - Configurable result ranking and filtering
     - Support for complex query patterns
     """
     
     def __init__(self):
         # Database and service connections
-        self.pg_pool = None                     # PostgreSQL for text retrieval
+        self.pg_pool = None                     # PostgreSQL for metadata only
         self.qdrant_client = None              # Qdrant for vector search
         self.embedding_client = httpx.AsyncClient()  # HTTP client for embedding MCP
         self.embedding_mcp_url = os.getenv("EMBEDDING_MCP_URL", "http://embedding-mcp:8002")
@@ -103,7 +103,8 @@ class RetrievalService:
             password=os.getenv("POSTGRES_PASSWORD", "postgres_pass"),
             database=os.getenv("POSTGRES_DATABASE", "ta_v8"),
             min_size=1,
-            max_size=10
+            max_size=10,
+            server_settings={"search_path": "rag_system, public"}
         )
         
         # Qdrant vector database client
@@ -167,6 +168,8 @@ class RetrievalService:
         except Exception as e:
             logger.error(f"Failed to get query embedding: {str(e)}")
             raise Exception(f"Query embedding failed: {str(e)}")
+
+
     
     async def search_vectors(self, query_vector: List[float], collection_name: str, 
                            top_k: int, filters: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -264,16 +267,20 @@ class RetrievalService:
             if not request.query.text.strip():
                 return MCPRetrieveResponse(hits=[], error="Empty query provided")
             
-            # Step 1: Get query embedding if semantic search is enabled
+            # Step 1: Get query embedding (required for semantic search)
             query_vector = None
             if request.query.use_embedding:
-                logger.info(f"Getting embedding for query: {request.query.text[:100]}...")
-                query_vector = await self.get_query_embedding(request.query.text, request.tenant_id)
+                try:
+                    logger.info(f"Getting embedding for query: {request.query.text[:100]}...")
+                    query_vector = await self.get_query_embedding(request.query.text, request.tenant_id)
+                except Exception as e:
+                    logger.error(f"Embedding failed: {str(e)}")
+                    return MCPRetrieveResponse(hits=[], error=f"Embedding service unavailable: {str(e)}")
             
             # Step 2: Prepare collection name with tenant isolation
             collection_name = f"{request.tenant_id}_{request.collection}"
             
-            # Step 3: Perform vector search or fallback to text search
+            # Step 3: Perform vector search in Qdrant
             vector_hits = []
             if query_vector:
                 try:
@@ -285,8 +292,11 @@ class RetrievalService:
                     )
                     logger.info(f"Vector search returned {len(vector_hits)} hits")
                 except Exception as e:
-                    logger.warning(f"Vector search failed, falling back to text search: {str(e)}")
-                    # Could implement text-based fallback here if needed
+                    logger.error(f"Vector search failed: {str(e)}")
+                    return MCPRetrieveResponse(hits=[], error=f"Vector search failed: {str(e)}")
+            else:
+                logger.error("No query vector available - embedding is required")
+                return MCPRetrieveResponse(hits=[], error="Query embedding is required for semantic search")
             
             # Step 4: Get full text content from PostgreSQL
             chunk_ids = [hit["id"] for hit in vector_hits]
@@ -298,12 +308,12 @@ class RetrievalService:
             hit_records = []
             for hit in vector_hits:
                 chunk_id = hit["id"]
-                full_text = text_map.get(chunk_id, hit["payload"].get("text", ""))
+                full_text = text_map.get(chunk_id, hit.get("payload", {}).get("text", ""))
                 
                 # Combine vector search metadata with payload metadata
                 combined_metadata = {
                     **hit["payload"],
-                    "search_type": "semantic" if query_vector else "fallback",
+                    "search_type": "semantic",
                     "collection": request.collection,
                     "retrieved_at": datetime.now().isoformat()
                 }

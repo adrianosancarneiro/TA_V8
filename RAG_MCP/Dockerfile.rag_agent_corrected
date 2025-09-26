@@ -1,0 +1,68 @@
+FROM nvidia/cuda:12.8.0-runtime-ubuntu24.04
+
+# Install Python 3.12 and system dependencies
+RUN apt-get update && apt-get install -y \
+    python3.12 \
+    python3-pip \
+    python3.12-venv \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create python symlink
+RUN ln -sf /usr/bin/python3.12 /usr/bin/python
+
+# Set working directory
+WORKDIR /app
+
+# Install Python packages globally (avoiding UV complexity)
+RUN pip install --break-system-packages \
+    uvicorn[standard] \
+    fastapi \
+    pydantic \
+    httpx \
+    asyncpg \
+    psycopg2-binary \
+    aiohttp \
+    numpy \
+    scikit-learn \
+    langchain \
+    langchain-community \
+    langgraph \
+    autogen \
+    tiktoken \
+    qdrant-client \
+    prometheus-client \
+    python-multipart \
+    requests \
+    uvloop \
+    structlog \
+    ollama \
+    minio \
+    neo4j \
+    python-dotenv \
+    pydantic-settings
+
+# Copy application code
+COPY . .
+
+# Create necessary directories
+RUN mkdir -p /app/logs /app/temp
+
+# Ensure Python can find the modules
+RUN touch /app/__init__.py && \
+    find /app -type d -name "shared" -exec touch {}/__init__.py \; && \
+    find /app -type d -name "mcp_services" -exec touch {}/__init__.py \;
+
+# Set environment variables
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+
+# Expose port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Run the RAG agent team application (corrected entry point)
+CMD ["python", "-m", "uvicorn", "rag_agent_team:app", "--host", "0.0.0.0", "--port", "8000"]

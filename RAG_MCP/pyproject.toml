@@ -21,6 +21,8 @@ dependencies = [
     "python-multipart>=0.0.6",
     "prometheus-client>=0.19.0",
     "structlog>=23.2.0",
+    "requests>=2.31.0",
+    "uvloop>=0.17.0",
     # Advanced chunking and NLP dependencies
     "sentence-transformers>=2.2.2",
     "ruptures>=1.1.9",
@@ -33,6 +35,8 @@ dependencies = [
     "ollama>=0.2.1",
     # MinIO client for object storage
     "minio>=7.2.0",
+    # Neo4j driver for graph database
+    "neo4j>=5.28.2",
     # Configuration management
     "python-dotenv>=1.0.0",
     "pydantic-settings>=2.1.0",
@@ -81,6 +85,8 @@ dev = [
     "httpx>=0.28.1",
     "neo4j>=5.28.2",
     "minio>=7.2.16",
+    "requests>=2.31.0",
+    "uvloop>=0.17.0",
 ]
 
 [tool.black]

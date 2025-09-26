@@ -21,22 +21,24 @@ ENV LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH
 
 WORKDIR /app
 
-# Copy application code first
+# Copy required files for dependency installation
+COPY pyproject.toml uv.lock* README.md ./
+
+# Create virtual environment and install dependencies
+RUN uv sync --no-dev
+
+# Copy the rest of the application code
 COPY . .
 
 # Create empty __init__.py for module imports
 RUN touch /app/__init__.py /app/shared/__init__.py
 
-# Install dependencies with UV
-RUN uv sync --no-dev
-
-# Set UV environment
-ENV UV_PYTHON_INSTALL_DIR=/app/.venv
+# Set environment for UV virtual environment
 ENV PATH="/app/.venv/bin:$PATH"
 ENV VIRTUAL_ENV="/app/.venv"
 
-# Install bash for activation script
-RUN apt-get update && apt-get install -y bash && rm -rf /var/lib/apt/lists/*
+# Install uvicorn globally as fallback
+RUN pip install uvicorn[standard] --break-system-packages
 
-# Default command (can be overridden in docker-compose)
-CMD ["bash", "-c", "source /app/.venv/bin/activate && uvicorn rag_agent_team:app --host 0.0.0.0 --port 8000"]
+# Default command with fallback to system uvicorn
+CMD ["bash", "-c", "cd /app && (/app/.venv/bin/uvicorn rag_agent_team:app --host 0.0.0.0 --port 8000 || uvicorn rag_agent_team:app --host 0.0.0.0 --port 8000)"]

@@ -105,7 +105,8 @@ class EmbeddingService:
             password=os.getenv("POSTGRES_PASSWORD", "postgres_pass"),
             database=os.getenv("POSTGRES_DATABASE", "ta_v8"),
             min_size=1,
-            max_size=10
+            max_size=10,
+            server_settings={"search_path": "rag_system, public"}
         )
         
         # Qdrant vector database client

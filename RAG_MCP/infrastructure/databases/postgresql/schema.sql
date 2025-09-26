@@ -462,10 +462,10 @@ SELECT
     dom.domain_type,
     t.tenant_id,
     t.name as tenant_name
-FROM chunks c
-JOIN documents d ON c.document_id = d.document_id
-LEFT JOIN domains dom ON c.domain_id = dom.domain_id
-JOIN tenants t ON c.tenant_id = t.tenant_id
+FROM rag_system.chunks c
+JOIN rag_system.documents d ON c.document_id = d.document_id
+LEFT JOIN rag_system.domains dom ON c.domain_id = dom.domain_id
+JOIN rag_system.tenants t ON c.tenant_id = t.tenant_id
 WHERE c.embedding_status = 'embedded';
 
 CREATE INDEX idx_chunk_search_tenant ON chunk_search_view(tenant_id);
@@ -535,3 +535,38 @@ WHERE staleness IN ('deprecated', 'legacy_context')
    OR (CURRENT_TIMESTAMP - updated_at) > INTERVAL '90 days'
 ORDER BY staleness_score ASC;
 */
+
+-- ============================================
+-- EMBEDDING METADATA TABLES (used by Embedding MCP)
+-- ============================================
+
+-- Batch tracking for embedding operations
+CREATE TABLE IF NOT EXISTS embedding_batches (
+    batch_id VARCHAR(255) PRIMARY KEY,
+    tenant_id VARCHAR(255) NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
+    collection_name VARCHAR(255) NOT NULL,
+    item_count INTEGER DEFAULT 0,
+    status VARCHAR(50) DEFAULT 'pending',
+    metadata JSONB DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_embedding_batches_tenant ON embedding_batches(tenant_id);
+
+-- Individual item embedding metadata
+CREATE TABLE IF NOT EXISTS embeddings (
+    item_id VARCHAR(255) NOT NULL,
+    tenant_id VARCHAR(255) NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
+    collection_name VARCHAR(255) NOT NULL,
+    batch_id VARCHAR(255) REFERENCES embedding_batches(batch_id) ON DELETE SET NULL,
+    vector_dim INTEGER,
+    item_text TEXT,
+    status VARCHAR(50) DEFAULT 'stored',
+    metadata JSONB DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (item_id, collection_name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_embeddings_tenant ON embeddings(tenant_id);
