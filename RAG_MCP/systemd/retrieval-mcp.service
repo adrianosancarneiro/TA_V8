@@ -1,0 +1,43 @@
+[Unit]
+Description=TA_V8 Retrieval MCP Server
+After=network.target postgresql.service qdrant.service
+Wants=postgresql.service qdrant.service
+PartOf=ta-v8-rag.target
+
+[Service]
+Type=simple
+User=mentorius
+Group=mentorius
+WorkingDirectory=/home/mentorius/AI_Services/TA_V8/RAG_MCP
+Environment="PYTHONPATH=/home/mentorius/AI_Services/TA_V8/RAG_MCP"
+Environment="PATH=/home/mentorius/AI_Services/TA_V8/RAG_MCP/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="VIRTUAL_ENV=/home/mentorius/AI_Services/TA_V8/RAG_MCP/.venv"
+
+# Database and Vector DB Configuration
+Environment="POSTGRES_HOST=localhost"
+Environment="POSTGRES_PORT=5432"
+Environment="POSTGRES_USER=postgres_user"
+Environment="POSTGRES_PASSWORD=postgres_pass"
+Environment="POSTGRES_DATABASE=ta_v8"
+Environment="QDRANT_HOST=localhost"
+Environment="QDRANT_PORT=6333"
+Environment="QDRANT_COLLECTION=ta_v8"
+
+# MCP Configuration - using HTTP transport
+Environment="MCP_TRANSPORT=http"
+Environment="MCP_SERVICE_NAME=retrieval_v1"
+
+ExecStart=/home/mentorius/AI_Services/TA_V8/RAG_MCP/.venv/bin/python mcp_services/retrieval/server.py --host 0.0.0.0 --port 8003 --transport http
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=retrieval-mcp
+
+# Resource limits
+LimitNOFILE=65536
+MemoryMax=4G
+CPUQuota=200%
+
+[Install]
+WantedBy=ta-v8-rag.target

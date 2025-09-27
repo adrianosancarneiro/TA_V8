@@ -92,15 +92,17 @@ class ChunkingStrategy(Enum):
 class DocumentAnalyzer:
     """Sophisticated document analyzer for optimal chunking strategy selection"""
     
-    def __init__(self, ollama_client=None, llm_model: str = "gpt-oss:20b"):
+    def __init__(self, vllm_client=None, llm_model: str = "openai/gpt-oss-20b", vllm_url: str = "http://localhost:8000"):
         """Initialize the document analyzer
         
         Args:
-            ollama_client: Ollama client for LLM analysis
+            vllm_client: HTTP client for vLLM analysis (httpx.AsyncClient)
             llm_model: Model to use for analysis
+            vllm_url: URL of the vLLM service
         """
-        self.ollama_client = ollama_client
+        self.vllm_client = vllm_client
         self.llm_model = llm_model
+        self.vllm_url = vllm_url
         self.tokenizer = tiktoken.get_encoding("cl100k_base")
         self.last_analyzed_text = None
     
@@ -121,7 +123,7 @@ class DocumentAnalyzer:
         Returns:
             Tuple of (recommended_strategy, analysis_details)
         """
-        if not self.ollama_client:
+        if not self.vllm_client:
             # Fallback to heuristic analysis if LLM not available
             return self._heuristic_analysis(text, metadata)
         
@@ -129,23 +131,29 @@ class DocumentAnalyzer:
             # Prepare comprehensive analysis prompt
             analysis_prompt = self._create_analysis_prompt(text, metadata)
             
-            logger.info("🔍 Analyzing document with LLM for optimal chunking strategy...")
+            logger.info("🔍 Analyzing document with vLLM for optimal chunking strategy...")
             
-            # Call LLM for sophisticated analysis
-            response = await self.ollama_client.chat(
-                model=self.llm_model,
-                messages=[{
-                    'role': 'user',
-                    'content': analysis_prompt
-                }],
-                options={
-                    'temperature': 0.1,  # Low temperature for consistent analysis
-                    'num_ctx': 8192,
-                    'top_p': 0.9
-                }
+            # Call vLLM for sophisticated analysis
+            vllm_request = {
+                "model": self.llm_model,
+                "messages": [
+                    {"role": "system", "content": "You are an expert document analyzer specializing in optimal text segmentation."},
+                    {"role": "user", "content": analysis_prompt}
+                ],
+                "temperature": 0.1,  # Low temperature for consistent analysis
+                "max_tokens": 1000,
+                "top_p": 0.9
+            }
+            
+            response = await self.vllm_client.post(
+                f"{self.vllm_url}/v1/chat/completions",
+                json=vllm_request,
+                timeout=30.0
             )
+            response.raise_for_status()
             
-            llm_response = response['message']['content']
+            result = response.json()
+            llm_response = result["choices"][0]["message"]["content"]
             
             # Parse LLM recommendation
             strategy, details = self._parse_llm_recommendation(llm_response)
@@ -351,7 +359,9 @@ class AdvancedChunker:
                  tokenizer=None,
                  sentence_model=None,
                  spacy_nlp=None,
-                 ollama_client=None,
+                 vllm_client=None,
+                 vllm_url="http://localhost:8000",
+                 llm_model="openai/gpt-oss-20b",
                  minio_client=None,
                  postgres_pool=None):
         """Initialize the advanced chunker
@@ -360,15 +370,17 @@ class AdvancedChunker:
             tokenizer: Tiktoken tokenizer for token counting
             sentence_model: SentenceTransformer for embeddings
             spacy_nlp: spaCy model for sentence segmentation
-            ollama_client: Ollama client for LLM operations
+            vllm_client: HTTP client for vLLM operations (httpx.AsyncClient)
+            vllm_url: URL of the vLLM service
+            llm_model: Model name for vLLM
             minio_client: MinIO client for document storage
             postgres_pool: PostgreSQL connection pool for chunk storage
         """
         self.tokenizer = tokenizer or tiktoken.get_encoding("cl100k_base")
         self.sentence_model = sentence_model
         self.spacy_nlp = spacy_nlp
-        self.ollama_client = ollama_client
-        self.analyzer = DocumentAnalyzer(ollama_client)
+        self.vllm_client = vllm_client
+        self.analyzer = DocumentAnalyzer(vllm_client, llm_model, vllm_url)
         
         # Storage clients
         self.minio_client = minio_client or self._init_minio_client()

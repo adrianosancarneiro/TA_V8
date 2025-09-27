@@ -22,20 +22,29 @@
 import os
 import json
 import logging
+import argparse
+import asyncio
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 
 import asyncpg
 import httpx
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field
 from qdrant_client import QdrantClient
 from qdrant_client.models import Filter, FieldCondition, MatchValue
+from mcp.server import FastMCP
+from mcp import types
+import uvicorn
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Determine MCP transport mode from environment
+transport_mode = os.getenv("MCP_TRANSPORT", "stdio").lower()
+
+# Always use FastAPI for HTTP endpoints, but add MCP compatibility
 app = FastAPI(title="Retriever MCP Server", version="1.0.0")
 
 # ============ MCP Request/Response Models ============
@@ -393,6 +402,82 @@ async def mcp_execute_endpoint(request: MCPRetrieveRequest) -> MCPRetrieveRespon
             error=f"Service error: {str(e)}"
         )
 
+# ============ MCP HTTP Endpoints (for HTTP + SSE transport) ============
+
+# HTTP MCP Endpoints for web clients
+@app.post("/mcp/initialize")
+async def mcp_initialize(request: Request):
+    """MCP initialization endpoint"""
+    return {
+        "protocolVersion": "2024-11-05",
+        "capabilities": {
+            "tools": {"listChanged": True}
+        },
+        "serverInfo": {
+            "name": "retrieval-mcp",
+            "version": "1.0.0"
+        }
+    }
+
+@app.get("/mcp/tools/list")
+async def mcp_tools_list():
+    """List available MCP tools via HTTP"""
+    tools = [
+        {
+            "name": "search_documents",
+            "description": "Search for documents using semantic similarity",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search query"},
+                    "tenant_id": {"type": "string", "description": "Tenant identifier"},
+                    "top_k": {"type": "integer", "default": 5, "description": "Number of results"}
+                },
+                "required": ["query", "tenant_id"]
+            }
+        }
+    ]
+    return {"tools": tools}
+
+@app.post("/mcp/tools/call")
+async def mcp_tools_call(call_request: dict):
+    """Execute MCP tool calls via HTTP"""
+    tool_name = call_request.get("name")
+    arguments = call_request.get("arguments", {})
+    
+    if tool_name == "search_documents":
+        try:
+            # Convert arguments to MCPRetrieveRequest format
+            request = MCPRetrieveRequest(
+                tenant_id=arguments["tenant_id"],
+                collection=arguments.get("collection", "knowledge_base"),
+                query=QuerySpec(text=arguments["query"]),
+                top_k=arguments.get("top_k", 5),
+                filters=arguments.get("filters", {})
+            )
+            
+            # Execute retrieval
+            response = await retrieval_service.retrieve_documents(request)
+            
+            # Format results
+            results = []
+            for hit in response.hits:
+                content = f"Score: {hit.score:.3f}\nText: {hit.text}\nMetadata: {json.dumps(hit.metadata)}"
+                results.append(content)
+            
+            if not results:
+                result_text = "No documents found matching the query."
+            else:
+                result_text = "\n\n".join(results)
+                
+            return {"content": [{"type": "text", "text": result_text}]}
+                
+        except Exception as e:
+            logger.error(f"Tool execution error: {str(e)}")
+            return {"content": [{"type": "text", "text": f"Error: {str(e)}"}]}
+    else:
+        return {"content": [{"type": "text", "text": f"Unknown tool: {tool_name}"}]}
+
 @app.get("/health")
 async def health_check():
     """
@@ -451,14 +536,36 @@ async def health_check():
 # ============ Main Application Entry Point ============
 
 if __name__ == "__main__":
-    import uvicorn
+    parser = argparse.ArgumentParser(description='Retrieval MCP Server')
+    parser.add_argument('--transport', choices=['stdio', 'http'], default='stdio',
+                        help='Transport mode (default: stdio)')
+    parser.add_argument('--host', default='0.0.0.0', help='Host to bind (HTTP mode only)')
+    parser.add_argument('--port', type=int, default=8003, help='Port to bind (HTTP mode only)')
     
-    # Production-ready ASGI server configuration
-    uvicorn.run(
-        "server:app",  # Module:app reference
-        host="0.0.0.0",  # Bind to all interfaces for container deployment
-        port=8003,       # Standard port for retrieval MCP service
-        reload=False,    # Disable reload in production
-        workers=1,       # Single worker for MVP, scale as needed
-        log_level="info"
-    )
+    args = parser.parse_args()
+    
+    # Override with environment variable if set
+    transport = os.getenv("MCP_TRANSPORT", args.transport).lower()
+    
+    if transport == "http":
+        logger.info("Starting Retrieval MCP Server in HTTP mode...")
+        
+        # Initialize service before starting server
+        async def startup():
+            await retrieval_service.startup()
+        
+        asyncio.run(startup())
+        
+        # Production-ready ASGI server configuration
+        uvicorn.run(
+            app,
+            host=args.host,
+            port=args.port,
+            reload=False,
+            workers=1,
+            log_level="info"
+        )
+    else:
+        logger.info("stdio mode not implemented - use HTTP mode")
+        logger.info("Use: python server.py --transport http")
+        exit(1)

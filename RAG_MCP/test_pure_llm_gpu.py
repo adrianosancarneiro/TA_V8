@@ -26,13 +26,13 @@ async def test_pure_llm_document_analysis():
     
     try:
         from document_chunker import DocumentAnalyzer
-        import ollama
+        import httpx
         
-        # Initialize with Ollama client
-        ollama_client = ollama.AsyncClient(host='http://localhost:11434')
-        analyzer = DocumentAnalyzer(ollama_client, llm_model="gpt-oss:20b")
+        # Initialize with vLLM client
+        vllm_client = httpx.AsyncClient()
+        analyzer = DocumentAnalyzer(vllm_client, llm_model="openai/gpt-oss-20b", vllm_url="http://localhost:8000")
         
-        print("✅ DocumentAnalyzer initialized with GPT-OSS 20B")
+        print("✅ DocumentAnalyzer initialized with vLLM GPT-OSS 20B")
         
         # Test document with some complexity
         test_doc = """
@@ -126,15 +126,17 @@ async def test_llm_assisted_chunking():
     try:
         from document_chunker import AdvancedChunker
         import tiktoken
-        import ollama
+        import httpx
         
         # Initialize components
         tokenizer = tiktoken.get_encoding('cl100k_base')
-        ollama_client = ollama.AsyncClient(host='http://localhost:11434')
+        vllm_client = httpx.AsyncClient()
         
         chunker = AdvancedChunker(
             tokenizer=tokenizer,
-            ollama_client=ollama_client
+            vllm_client=vllm_client,
+            vllm_url="http://localhost:8000",
+            llm_model="openai/gpt-oss-20b"
         )
         
         # Test document for chunking
@@ -209,15 +211,17 @@ async def test_auto_strategy_with_llm():
     try:
         from document_chunker import AdvancedChunker
         import tiktoken
-        import ollama
+        import httpx
         
         # Initialize components
         tokenizer = tiktoken.get_encoding('cl100k_base')
-        ollama_client = ollama.AsyncClient(host='http://localhost:11434')
+        vllm_client = httpx.AsyncClient()
         
         chunker = AdvancedChunker(
             tokenizer=tokenizer,
-            ollama_client=ollama_client
+            vllm_client=vllm_client,
+            vllm_url="http://localhost:8000",
+            llm_model="openai/gpt-oss-20b"
         )
         
         # Test document that should trigger LLM analysis

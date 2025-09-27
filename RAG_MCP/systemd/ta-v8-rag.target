@@ -1,0 +1,8 @@
+[Unit]
+Description=TA_V8 RAG MCP System
+Documentation=https://github.com/adrianosancarneiro/TA_V8
+After=multi-user.target
+Wants=chunking-mcp.service embedding-mcp.service retrieval-mcp.service rag-agent-team.service tab-mcp-client.service
+
+[Install]
+WantedBy=multi-user.target

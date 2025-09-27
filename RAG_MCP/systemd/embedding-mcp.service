@@ -1,0 +1,47 @@
+[Unit]
+Description=TA_V8 Embedding MCP Server
+After=network.target postgresql.service neo4j.service
+Wants=postgresql.service neo4j.service
+PartOf=ta-v8-rag.target
+
+[Service]
+Type=simple
+User=mentorius
+Group=mentorius
+WorkingDirectory=/home/mentorius/AI_Services/TA_V8/RAG_MCP
+Environment="PYTHONPATH=/home/mentorius/AI_Services/TA_V8/RAG_MCP"
+Environment="PATH=/home/mentorius/AI_Services/TA_V8/RAG_MCP/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="VIRTUAL_ENV=/home/mentorius/AI_Services/TA_V8/RAG_MCP/.venv"
+
+# Database Configuration
+Environment="POSTGRES_HOST=localhost"
+Environment="POSTGRES_PORT=5432"
+Environment="POSTGRES_USER=postgres_user"
+Environment="POSTGRES_PASSWORD=postgres_pass"
+Environment="POSTGRES_DATABASE=ta_v8"
+Environment="NEO4J_URI=bolt://localhost:7687"
+Environment="NEO4J_USER=neo4j"
+Environment="NEO4J_PASSWORD=pJnssz3khcLtn6T"
+
+# Embedding Service Configuration
+Environment="EMBEDDING_URL=http://localhost:8080"
+Environment="EMBEDDING_MODEL=intfloat/multilingual-e5-large"
+
+# MCP Configuration - using stdio transport
+Environment="MCP_TRANSPORT=stdio"
+Environment="MCP_SERVICE_NAME=embedding_v1"
+
+ExecStart=ExecStart=/home/mentorius/AI_Services/TA_V8/RAG_MCP/.venv/bin/python mcp_services/embedding/server.py --host 0.0.0.0 --port 8004 --transport http
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=embedding-mcp
+
+# Resource limits
+LimitNOFILE=65536
+MemoryMax=4G
+CPUQuota=200%
+
+[Install]
+WantedBy=ta-v8-rag.target

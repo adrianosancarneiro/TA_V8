@@ -24,19 +24,33 @@ import json
 import uuid
 import hashlib
 import logging
+import asyncio
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 
 import asyncpg
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field
 from minio import Minio
 from neo4j import AsyncGraphDatabase
 import tiktoken
+from mcp.server import FastMCP
+from mcp import types
+import uvicorn
+
+# MCP imports for HTTP support
+from fastapi.responses import StreamingResponse
+import json
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Determine MCP transport mode from environment
+transport_mode = os.getenv("MCP_TRANSPORT", "stdio").lower()
+
+# Always use FastAPI for HTTP endpoints, but add MCP compatibility
+app = FastAPI(title="Chunking MCP Server", version="1.0.0")
 
 app = FastAPI(title="Chunking MCP Server", version="1.0.0")
 
@@ -479,16 +493,142 @@ async def health_check():
             "error": str(e)
         }
 
+# ============ MCP Protocol HTTP Endpoints ============
+# Standard MCP over HTTP endpoints for client communication
+
+@app.post("/mcp/initialize") 
+async def mcp_initialize():
+    """MCP initialization endpoint"""
+    return {
+        "protocolVersion": "2024-11-05",
+        "capabilities": {
+            "tools": {
+                "listChanged": True
+            }
+        },
+        "serverInfo": {
+            "name": "chunking_v1",
+            "version": "1.0.0"
+        }
+    }
+
+@app.get("/mcp/tools/list")
+async def mcp_list_tools():
+    """List available MCP tools"""
+    return {
+        "tools": [
+            {
+                "name": "chunk_document", 
+                "description": "Chunk document using specified policy",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "content": {
+                            "type": "string",
+                            "description": "Document content to chunk"
+                        },
+                        "policy": {
+                            "type": "object",
+                            "description": "Chunking policy configuration",
+                            "properties": {
+                                "method": {"type": "string", "default": "recursive"},
+                                "target_tokens": {"type": "integer", "default": 512}
+                            }
+                        }
+                    },
+                    "required": ["content"]
+                }
+            }
+        ]
+    }
+
+@app.post("/mcp/tools/call")
+async def mcp_call_tool(request: dict):
+    """Call an MCP tool"""
+    try:
+        tool_name = request.get("name")
+        arguments = request.get("arguments", {})
+        
+        if tool_name == "chunk_document":
+            content = arguments.get("content", "")
+            policy = arguments.get("policy", {})
+            
+            # Initialize chunking policy
+            chunk_policy = ChunkingPolicy(**policy)
+            
+            # Perform chunking using the existing service
+            tokenizer = tiktoken.get_encoding('cl100k_base')
+            chunks = []
+            
+            # Simple recursive chunking
+            words = content.split()
+            current_chunk = []
+            current_tokens = 0
+            
+            for word in words:
+                word_tokens = len(tokenizer.encode(word))
+                if current_tokens + word_tokens > chunk_policy.target_tokens and current_chunk:
+                    chunk_text = ' '.join(current_chunk)
+                    chunks.append({
+                        "content": chunk_text,
+                        "tokens": current_tokens,
+                        "id": str(uuid.uuid4())
+                    })
+                    current_chunk = [word]
+                    current_tokens = word_tokens
+                else:
+                    current_chunk.append(word)
+                    current_tokens += word_tokens
+            
+            # Add final chunk
+            if current_chunk:
+                chunk_text = ' '.join(current_chunk)
+                chunks.append({
+                    "content": chunk_text,
+                    "tokens": current_tokens,
+                    "id": str(uuid.uuid4())
+                })
+            
+            result = {
+                "chunks": chunks,
+                "total_chunks": len(chunks),
+                "policy_used": chunk_policy.method
+            }
+            
+            return {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": json.dumps(result)
+                    }
+                ]
+            }
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown tool: {tool_name}")
+            
+    except Exception as e:
+        logger.error(f"Error in MCP tool call: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # ============ Main Application Entry Point ============
 
 if __name__ == "__main__":
+    import sys
+    import argparse
     import uvicorn
     
-    # Production-ready ASGI server configuration
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description="Chunking MCP Server")
+    parser.add_argument("--host", default="0.0.0.0", help="Host to bind to")
+    parser.add_argument("--port", type=int, default=8001, help="Port to bind to")
+    parser.add_argument("--transport", default="http", help="Transport mode (http only)")
+    args = parser.parse_args()
+    
+    # Start HTTP FastAPI server
     uvicorn.run(
-        "server:app",  # Module:app reference
-        host="0.0.0.0",  # Bind to all interfaces for container deployment
-        port=8001,       # Standard port for chunking MCP service
+        app,  # Direct app reference
+        host=args.host,  # Configurable host
+        port=args.port,  # Configurable port
         reload=False,    # Disable reload in production
         workers=1,       # Single worker for MVP, scale as needed
         log_level="info"

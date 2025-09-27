@@ -1,0 +1,52 @@
+[Unit]
+Description=TA_V8 RAG Agent Team MCP Server
+After=network.target postgresql.service neo4j.service qdrant.service minio.service vllm-gpt-oss.service
+Wants=postgresql.service neo4j.service qdrant.service minio.service vllm-gpt-oss.service
+PartOf=ta-v8-rag.target
+
+[Service]
+Type=simple
+User=mentorius
+Group=mentorius
+WorkingDirectory=/home/mentorius/AI_Services/TA_V8/RAG_MCP
+Environment="PYTHONPATH=/home/mentorius/AI_Services/TA_V8/RAG_MCP"
+Environment="PATH=/home/mentorius/AI_Services/TA_V8/RAG_MCP/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="VIRTUAL_ENV=/home/mentorius/AI_Services/TA_V8/RAG_MCP/.venv"
+
+# Environment variables
+Environment="POSTGRES_HOST=localhost"
+Environment="POSTGRES_PORT=5432"
+Environment="POSTGRES_USER=postgres_user"
+Environment="POSTGRES_PASSWORD=postgres_pass"
+Environment="POSTGRES_DATABASE=ta_v8"
+Environment="NEO4J_URI=bolt://localhost:7687"
+Environment="NEO4J_USER=neo4j"
+Environment="NEO4J_PASSWORD=pJnssz3khcLtn6T"
+Environment="QDRANT_HOST=localhost"
+Environment="QDRANT_PORT=6333"
+Environment="MINIO_ENDPOINT=localhost:9000"
+Environment="MINIO_ACCESS_KEY=minioadmin"
+Environment="MINIO_SECRET_KEY=minioadmin"
+Environment="VLLM_URL=http://localhost:8000"
+Environment="DEFAULT_LLM=openai/gpt-oss-20b"
+
+# MCP Configuration - using stdio transport
+Environment="MCP_TRANSPORT=stdio"
+Environment="CHUNKING_MCP_SERVICE=chunking-mcp"
+Environment="EMBEDDING_MCP_SERVICE=embedding-mcp"
+Environment="RETRIEVAL_MCP_SERVICE=retrieval-mcp"
+
+ExecStart=/home/mentorius/AI_Services/TA_V8/RAG_MCP/.venv/bin/python rag_agent_team.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=rag-agent-team
+
+# Resource limits
+LimitNOFILE=65536
+MemoryMax=8G
+CPUQuota=200%
+
+[Install]
+WantedBy=ta-v8-rag.target

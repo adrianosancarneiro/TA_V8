@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TAB MCP Client - RAG System Interface</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .container {
+            width: 90%;
+            max-width: 1200px;
+            height: 90vh;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            display: flex;
+            overflow: hidden;
+        }
+        
+        /* Sidebar */
+        .sidebar {
+            width: 300px;
+            background: #f7f9fc;
+            padding: 20px;
+            border-right: 1px solid #e2e8f0;
+            overflow-y: auto;
+        }
+        
+        .sidebar h2 {
+            color: #2d3748;
+            margin-bottom: 20px;
+            font-size: 18px;
+        }
+        
+        .config-section {
+            margin-bottom: 25px;
+        }
+        
+        .config-section h3 {
+            color: #4a5568;
+            font-size: 14px;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .upload-button {
+            width: 100%;
+            padding: 10px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-bottom: 10px;
+            transition: background 0.3s;
+        }
+        
+        .upload-button:hover {
+            background: #5a67d8;
+        }
+        
+        .upload-button:disabled {
+            background: #cbd5e0;
+            cursor: not-allowed;
+        }
+        
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        
+        .status-dot.active {
+            background: #48bb78;
+        }
+        
+        .status-dot.inactive {
+            background: #cbd5e0;
+        }
+        
+        .status-dot.error {
+            background: #f56565;
+        }
+        
+        /* Main Chat Area */
+        .chat-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .chat-header {
+            padding: 20px;
+            background: #fff;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .chat-header h1 {
+            color: #2d3748;
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+        
+        .chat-header p {
+            color: #718096;
+            font-size: 14px;
+        }
+        
+        .messages-container {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background: #fafbfc;
+        }
+        
+        .message {
+            margin-bottom: 20px;
+            animation: fadeIn 0.3s ease-in;
+        }
+        
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .message.user {
+            text-align: right;
+        }
+        
+        .message.assistant {
+            text-align: left;
+        }
+        
+        .message-bubble {
+            display: inline-block;
+            max-width: 70%;
+            padding: 12px 16px;
+            border-radius: 18px;
+            word-wrap: break-word;
+        }
+        
+        .message.user .message-bubble {
+            background: #667eea;
+            color: white;
+        }
+        
+        .message.assistant .message-bubble {
+            background: white;
+            color: #2d3748;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .message-meta {
+            font-size: 12px;
+            color: #a0aec0;
+            margin-top: 5px;
+        }
+        
+        .source-citation {
+            margin-top: 10px;
+            padding: 8px;
+            background: #f7fafc;
+            border-left: 3px solid #667eea;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        
+        /* Input Area */
+        .input-area {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e2e8f0;
+        }
+        
+        .input-container {
+            display: flex;
+            gap: 10px;
+        }
+        
+        #messageInput {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid #e2e8f0;
+            border-radius: 25px;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+        
+        #messageInput:focus {
+            border-color: #667eea;
+        }
+        
+        #sendButton {
+            padding: 12px 25px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+        
+        #sendButton:hover {
+            background: #5a67d8;
+        }
+        
+        #sendButton:disabled {
+            background: #cbd5e0;
+            cursor: not-allowed;
+        }
+        
+        /* File Upload Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        
+        .modal.active {
+            display: flex;
+        }
+        
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            max-width: 500px;
+            width: 90%;
+        }
+        
+        .modal-header {
+            margin-bottom: 20px;
+        }
+        
+        .modal-header h2 {
+            color: #2d3748;
+            margin-bottom: 5px;
+        }
+        
+        .modal-header p {
+            color: #718096;
+            font-size: 14px;
+        }
+        
+        .modal-body {
+            margin-bottom: 20px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #4a5568;
+            font-size: 14px;
+        }
+        
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+        
+        .btn-cancel {
+            background: #e2e8f0;
+            color: #4a5568;
+        }
+        
+        .btn-cancel:hover {
+            background: #cbd5e0;
+        }
+        
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #5a67d8;
+        }
+        
+        /* Commands Help */
+        .commands-help {
+            margin-top: 20px;
+            padding: 15px;
+            background: #fff;
+            border-radius: 8px;
+            font-size: 13px;
+        }
+        
+        .commands-help h4 {
+            color: #4a5568;
+            margin-bottom: 10px;
+        }
+        
+        .command-item {
+            margin-bottom: 5px;
+            color: #718096;
+        }
+        
+        .command-item code {
+            background: #f7fafc;
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: #667eea;
+        }
+        
+        /* Loading Spinner */
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #e2e8f0;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <h2>Configuration Manager</h2>
+            
+            <div class="config-section">
+                <h3>Tenant Configuration</h3>
+                <button class="upload-button" onclick="showUploadModal('tenant')">
+                    📤 Upload Tenant YAML
+                </button>
+                <div class="status-indicator">
+                    <span class="status-dot inactive" id="tenantStatus"></span>
+                    <span id="tenantStatusText">No tenant loaded</span>
+                </div>
+            </div>
+            
+            <div class="config-section">
+                <h3>Domain Knowledge</h3>
+                <button class="upload-button" onclick="showUploadModal('domain')">
+                    📚 Upload Domain YAML
+                </button>
+                <div class="status-indicator">
+                    <span class="status-dot inactive" id="domainStatus"></span>
+                    <span id="domainStatusText">No domain loaded</span>
+                </div>
+            </div>
+            
+            <div class="config-section">
+                <h3>Document Upload</h3>
+                <button class="upload-button" onclick="showUploadModal('document')">
+                    📄 Upload Document
+                </button>
+                <div class="status-indicator">
+                    <span class="status-dot inactive" id="documentStatus"></span>
+                    <span id="documentStatusText">0 documents</span>
+                </div>
+            </div>
+            
+            <div class="config-section">
+                <h3>Agent Team</h3>
+                <button class="upload-button" onclick="showUploadModal('team')">
+                    🤖 Upload Team YAML
+                </button>
+                <div class="status-indicator">
+                    <span class="status-dot active" id="agentStatus"></span>
+                    <span id="agentStatusText">RAG team ready</span>
+                </div>
+            </div>
+            
+            <div class="commands-help">
+                <h4>Available Commands</h4>
+                <div class="command-item"><code>/status</code> - System status</div>
+                <div class="command-item"><code>/upload tenant</code> - Upload tenant</div>
+                <div class="command-item"><code>/upload domain</code> - Upload domain</div>
+                <div class="command-item"><code>/upload document</code> - Upload doc</div>
+            </div>
+        </div>
+        
+        <!-- Main Chat Area -->
+        <div class="chat-area">
+            <div class="chat-header">
+                <h1>TAB MCP Client</h1>
+                <p>Interactive RAG System Configuration and Query Interface</p>
+            </div>
+            
+            <div class="messages-container" id="messagesContainer">
+                <div class="message assistant">
+                    <div class="message-bubble">
+                        Welcome to TAB MCP Client! I can help you:
+                        <br><br>
+                        1. 📤 Upload and manage tenant configurations
+                        <br>2. 📚 Configure domain knowledge
+                        <br>3. 📄 Process and index documents
+                        <br>4. 🔍 Query your knowledge base
+                        <br><br>
+                        Start by uploading a tenant configuration or type a query to begin!
+                    </div>
+                    <div class="message-meta">System</div>
+                </div>
+            </div>
+            
+            <div class="input-area">
+                <div class="input-container">
+                    <input type="text" id="messageInput" placeholder="Type your message or command..." onkeypress="handleKeyPress(event)">
+                    <button id="sendButton" onclick="sendMessage()">Send</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Upload Modal -->
+    <div class="modal" id="uploadModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">Upload Configuration</h2>
+                <p id="modalDescription">Select a file to upload</p>
+            </div>
+            
+            <div class="modal-body">
+                <form id="uploadForm">
+                    <div class="form-group">
+                        <label for="fileInput">Select File:</label>
+                        <input type="file" id="fileInput" accept=".yaml,.yml,.pdf,.txt,.md,.docx" required>
+                    </div>
+                    
+                    <div class="form-group" id="tenantIdGroup" style="display: none;">
+                        <label for="tenantId">Tenant ID:</label>
+                        <input type="text" id="tenantId" placeholder="e.g., tenant_001">
+                    </div>
+                    
+                    <div class="form-group" id="domainIdGroup" style="display: none;">
+                        <label for="domainId">Domain ID:</label>
+                        <input type="text" id="domainId" placeholder="e.g., domain_001">
+                    </div>
+                    
+                    <div class="form-group" id="titleGroup" style="display: none;">
+                        <label for="documentTitle">Document Title:</label>
+                        <input type="text" id="documentTitle" placeholder="Enter document title">
+                    </div>
+                    
+                    <div class="form-group" id="entitiesGroup" style="display: none;">
+                        <label for="knowledgeEntities">Knowledge Entities (comma-separated):</label>
+                        <input type="text" id="knowledgeEntities" placeholder="e.g., entity_001, entity_002">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="createdBy">Your Name:</label>
+                        <input type="text" id="createdBy" placeholder="Enter your name" required>
+                    </div>
+                </form>
+            </div>
+            
+            <div class="modal-footer">
+                <button class="btn btn-cancel" onclick="closeModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="uploadFile()">Upload</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Global variables
+        let currentUploadType = '';
+        let currentTenantId = localStorage.getItem('currentTenantId') || '';
+        let currentDomainId = localStorage.getItem('currentDomainId') || '';
+        let sessionId = generateSessionId();
+        
+        function generateSessionId() {
+            return 'session_' + Math.random().toString(36).substr(2, 9);
+        }
+        
+        // Message handling
+        function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            
+            if (!message) return;
+            
+            // Add user message to chat
+            addMessage(message, 'user');
+            
+            // Clear input
+            input.value = '';
+            
+            // Disable send button
+            document.getElementById('sendButton').disabled = true;
+            
+            // Send to backend
+            fetch('/api/chat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    message: message,
+                    tenant_id: currentTenantId || 'default',
+                    domain_id: currentDomainId,
+                    session_id: sessionId
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Add assistant response
+                addMessage(data.response, 'assistant', data.sources);
+                
+                // Handle special actions
+                if (data.action) {
+                    handleAction(data.action);
+                }
+            })
+            .catch(error => {
+                addMessage('Sorry, I encountered an error: ' + error.message, 'assistant');
+            })
+            .finally(() => {
+                document.getElementById('sendButton').disabled = false;
+            });
+        }
+        
+        function addMessage(text, sender, sources = null) {
+            const container = document.getElementById('messagesContainer');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}`;
+            
+            let html = `<div class="message-bubble">${escapeHtml(text)}</div>`;
+            
+            if (sources && sources.length > 0) {
+                html += '<div class="source-citation">Sources: ';
+                sources.forEach((source, index) => {
+                    if (index > 0) html += ', ';
+                    html += `${source.title || source.document_id}`;
+                });
+                html += '</div>';
+            }
+            
+            html += `<div class="message-meta">${sender === 'user' ? 'You' : 'Assistant'}</div>`;
+            
+            messageDiv.innerHTML = html;
+            container.appendChild(messageDiv);
+            
+            // Scroll to bottom
+            container.scrollTop = container.scrollHeight;
+        }
+        
+        function handleKeyPress(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        // Modal handling
+        function showUploadModal(type) {
+            currentUploadType = type;
+            const modal = document.getElementById('uploadModal');
+            const title = document.getElementById('modalTitle');
+            const description = document.getElementById('modalDescription');
+            
+            // Reset form
+            document.getElementById('uploadForm').reset();
+            
+            // Hide all optional fields
+            document.getElementById('tenantIdGroup').style.display = 'none';
+            document.getElementById('domainIdGroup').style.display = 'none';
+            document.getElementById('titleGroup').style.display = 'none';
+            document.getElementById('entitiesGroup').style.display = 'none';
+            
+            // Configure based on type
+            switch(type) {
+                case 'tenant':
+                    title.textContent = 'Upload Tenant Configuration';
+                    description.textContent = 'Upload a YAML file with tenant configuration';
+                    document.getElementById('fileInput').accept = '.yaml,.yml';
+                    break;
+                    
+                case 'domain':
+                    title.textContent = 'Upload Domain Knowledge Configuration';
+                    description.textContent = 'Upload a YAML file with domain knowledge configuration';
+                    document.getElementById('fileInput').accept = '.yaml,.yml';
+                    break;
+                    
+                case 'document':
+                    title.textContent = 'Upload Document';
+                    description.textContent = 'Upload a document to process and index';
+                    document.getElementById('fileInput').accept = '.pdf,.txt,.md,.docx,.html';
+                    document.getElementById('tenantIdGroup').style.display = 'block';
+                    document.getElementById('domainIdGroup').style.display = 'block';
+                    document.getElementById('titleGroup').style.display = 'block';
+                    document.getElementById('entitiesGroup').style.display = 'block';
+                    
+                    // Pre-fill tenant and domain IDs if available
+                    if (currentTenantId) {
+                        document.getElementById('tenantId').value = currentTenantId;
+                    }
+                    if (currentDomainId) {
+                        document.getElementById('domainId').value = currentDomainId;
+                    }
+                    break;
+                    
+                case 'team':
+                    title.textContent = 'Upload Agent Team Configuration';
+                    description.textContent = 'Upload a YAML file with agent team configuration';
+                    document.getElementById('fileInput').accept = '.yaml,.yml';
+                    break;
+            }
+            
+            modal.classList.add('active');
+        }
+        
+        function closeModal() {
+            document.getElementById('uploadModal').classList.remove('active');
+        }
+        
+        function uploadFile() {
+            const fileInput = document.getElementById('fileInput');
+            const createdBy = document.getElementById('createdBy').value;
+            
+            if (!fileInput.files[0] || !createdBy) {
+                alert('Please select a file and enter your name');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            formData.append('created_by', createdBy);
+            
+            // Add additional fields for document upload
+            if (currentUploadType === 'document') {
+                const tenantId = document.getElementById('tenantId').value;
+                const domainId = document.getElementById('domainId').value;
+                const title = document.getElementById('documentTitle').value;
+                const entities = document.getElementById('knowledgeEntities').value;
+                
+                if (!tenantId || !domainId || !title) {
+                    alert('Please fill in all required fields');
+                    return;
+                }
+                
+                formData.append('tenant_id', tenantId);
+                formData.append('domain_id', domainId);
+                formData.append('title', title);
+                formData.append('uploaded_by', createdBy);
+                formData.append('knowledge_entities', JSON.stringify(entities.split(',').map(e => e.trim()).filter(e => e)));
+            }
+            
+            // Determine endpoint
+            let endpoint = '';
+            switch(currentUploadType) {
+                case 'tenant':
+                    endpoint = '/api/tenant/upload';
+                    break;
+                case 'domain':
+                    endpoint = '/api/domain/upload';
+                    break;
+                case 'document':
+                    endpoint = '/api/document/upload';
+                    break;
+                case 'team':
+                    endpoint = '/api/team/upload';
+                    break;
+            }
+            
+            // Upload file
+            fetch(endpoint, {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Update status
+                    updateStatus(currentUploadType, data);
+                    
+                    // Add success message
+                    addMessage(`✅ ${data.message}`, 'assistant');
+                    
+                    // Store IDs if tenant or domain
+                    if (currentUploadType === 'tenant' && data.tenant_id) {
+                        currentTenantId = data.tenant_id;
+                        localStorage.setItem('currentTenantId', currentTenantId);
+                    }
+                    if (currentUploadType === 'domain' && data.domain_id) {
+                        currentDomainId = data.domain_id;
+                        localStorage.setItem('currentDomainId', currentDomainId);
+                    }
+                    
+                    // Close modal
+                    closeModal();
+                } else {
+                    alert('Upload failed: ' + (data.detail || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                alert('Upload error: ' + error.message);
+            });
+        }
+        
+        function updateStatus(type, data) {
+            switch(type) {
+                case 'tenant':
+                    document.getElementById('tenantStatus').className = 'status-dot active';
+                    document.getElementById('tenantStatusText').textContent = data.tenant_name || 'Tenant loaded';
+                    break;
+                case 'domain':
+                    document.getElementById('domainStatus').className = 'status-dot active';
+                    document.getElementById('domainStatusText').textContent = data.domain_name || 'Domain loaded';
+                    break;
+                case 'document':
+                    document.getElementById('documentStatus').className = 'status-dot active';
+                    const currentCount = parseInt(document.getElementById('documentStatusText').textContent) || 0;
+                    document.getElementById('documentStatusText').textContent = `${currentCount + 1} documents`;
+                    break;
+            }
+        }
+        
+        function handleAction(action) {
+            switch(action) {
+                case 'upload_tenant':
+                    showUploadModal('tenant');
+                    break;
+                case 'upload_domain':
+                    showUploadModal('domain');
+                    break;
+                case 'upload_document':
+                    showUploadModal('document');
+                    break;
+            }
+        }
+        
+        // Initialize on load
+        document.addEventListener('DOMContentLoaded', function() {
+            // Focus on input
+            document.getElementById('messageInput').focus();
+            
+            // Check stored IDs
+            if (currentTenantId) {
+                document.getElementById('tenantStatus').className = 'status-dot active';
+                document.getElementById('tenantStatusText').textContent = 'Tenant loaded';
+            }
+            if (currentDomainId) {
+                document.getElementById('domainStatus').className = 'status-dot active';
+                document.getElementById('domainStatusText').textContent = 'Domain loaded';
+            }
+        });
+    </script>
+</body>
+</html>

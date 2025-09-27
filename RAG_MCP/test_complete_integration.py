@@ -30,23 +30,25 @@ async def test_unified_mcp_with_llm_chunker():
         from unified_mcp_server import UnifiedMCPServer
         from document_chunker import AdvancedChunker, DocumentAnalyzer
         import tiktoken
-        import ollama
+        import httpx
         
         print("✅ All modules imported successfully")
         
         # Initialize components
         tokenizer = tiktoken.get_encoding('cl100k_base')
-        ollama_client = ollama.AsyncClient(host='http://localhost:11434')
+        vllm_client = httpx.AsyncClient()
         
         # Create chunker with LLM support
         chunker = AdvancedChunker(
             tokenizer=tokenizer,
-            ollama_client=ollama_client
+            vllm_client=vllm_client,
+            vllm_url="http://localhost:8000",
+            llm_model="openai/gpt-oss-20b"
         )
         
-        analyzer = DocumentAnalyzer(ollama_client, llm_model="gpt-oss:20b")
+        analyzer = DocumentAnalyzer(vllm_client, llm_model="openai/gpt-oss-20b", vllm_url="http://localhost:8000")
         
-        print("🤖 Initialized chunker with GPT-OSS 20B LLM support")
+        print("🤖 Initialized chunker with vLLM GPT-OSS 20B LLM support")
         
         # Test document for processing
         test_document = """

@@ -1,0 +1,130 @@
+# Sample Domain Knowledge Configuration
+# ======================================
+# This is an example domain knowledge configuration file for TAB_MCP_Client
+
+domain_id: "domain_crm_001"
+tenant_id: "tenant_acme_001"
+name: "customer_relationship_management"
+display_name: "Customer Relationship Management System"
+
+# Domain Classification
+domain_type: "Application"  # Application, BusinessArea, Department, ProductLine, Service
+domain_category: "Software"
+
+# Hierarchical Structure
+path: "/applications/business/crm"
+level: 3
+parent_domain_id: "domain_business_apps_001"  # Optional parent domain
+
+# Domain-specific Attributes
+attributes:
+  version: "3.5.0"
+  platform: "web"
+  programming_languages: ["Python", "JavaScript", "SQL"]
+  databases: ["PostgreSQL", "Redis"]
+  api_style: "REST"
+  authentication: "OAuth2"
+  deployment_type: "cloud"
+  user_base: 1000
+  transaction_volume: "high"
+  criticality: "business-critical"
+
+# Knowledge Configuration
+knowledge_sources:
+  - "confluence"
+  - "github"
+  - "jira"
+  - "slack"
+  - "technical_docs"
+  - "user_manuals"
+indexing_frequency: "daily"
+retention_days: 365
+
+# Metadata Template
+metadata_template:
+  features:
+    - "ContactManagement"
+    - "LeadTracking"
+    - "SalesAutomation"
+    - "CustomerSupport"
+    - "Analytics"
+    - "Integration"
+  content_types:
+    - "TechnicalSpecification"
+    - "UserGuide"
+    - "APIDocumentation"
+    - "DesignDocument"
+    - "ReleaseNotes"
+  sources:
+    - "ConfluencePage"
+    - "GitHubRepository"
+    - "JiraTicket"
+    - "SlackConversation"
+    - "MeetingTranscript"
+  staleness_levels:
+    - "deprecated"
+    - "legacy_context"
+    - "current"
+    - "in_development"
+  custom_fields:
+    business_impact: ["low", "medium", "high", "critical"]
+    technical_complexity: ["simple", "moderate", "complex", "expert"]
+
+# Knowledge Entities
+knowledge_entities:
+  - entity_id: "ke_crm_contacts_001"
+    entity_type: "Feature"
+    entity_subtype: "CoreModule"
+    name: "ContactManagement"
+    display_name: "Contact Management Module"
+    description: "Manages customer and prospect contact information"
+    path: "CRM > Contacts"
+    hierarchy_level: 1
+    properties:
+      complexity: "medium"
+      business_impact: "high"
+      dependencies: ["Database", "Authentication"]
+      owner_team: "crm-backend"
+    tags: ["contacts", "customers", "data-management"]
+    keywords: ["contact", "customer", "person", "company", "organization"]
+    staleness: "current"
+    staleness_score: 0.95
+  
+  - entity_id: "ke_crm_leads_001"
+    entity_type: "Feature"
+    entity_subtype: "SalesModule"
+    name: "LeadTracking"
+    display_name: "Lead Tracking System"
+    description: "Tracks and manages sales leads through the pipeline"
+    path: "CRM > Sales > Leads"
+    hierarchy_level: 2
+    parent_entity_id: "ke_crm_sales_001"
+    properties:
+      complexity: "high"
+      business_impact: "critical"
+      dependencies: ["ContactManagement", "Analytics"]
+      owner_team: "sales-engineering"
+    tags: ["sales", "leads", "pipeline", "conversion"]
+    keywords: ["lead", "opportunity", "prospect", "pipeline", "funnel"]
+    staleness: "current"
+    staleness_score: 0.90
+  
+  - entity_id: "ke_crm_analytics_001"
+    entity_type: "Feature"
+    entity_subtype: "AnalyticsModule"
+    name: "Analytics"
+    display_name: "Analytics and Reporting"
+    description: "Provides insights and reporting on CRM data"
+    path: "CRM > Analytics"
+    hierarchy_level: 1
+    properties:
+      complexity: "high"
+      business_impact: "high"
+      dependencies: ["ContactManagement", "LeadTracking", "DataWarehouse"]
+      owner_team: "data-analytics"
+    tags: ["analytics", "reporting", "insights", "dashboard"]
+    keywords: ["report", "dashboard", "metrics", "KPI", "analysis", "chart"]
+    staleness: "current"
+    staleness_score: 0.85
+
+status: "active"

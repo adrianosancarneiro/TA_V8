@@ -98,9 +98,9 @@ class Config:
     EMBEDDING_URL = get_env_var("EMBEDDING_URL", "http://multilingual-e5-large:8080")
     EMBEDDING_API_KEY = get_env_var("EMBEDDING_API_KEY", "")
     
-    # LLM Configuration - using Docker service names
-    OLLAMA_URL = get_env_var("OLLAMA_URL", "http://ta_v8_ollama:11434")
-    OLLAMA_API_KEY = get_env_var("OLLAMA_API_KEY", "")
+    # LLM Configuration - using local vLLM service
+    VLLM_URL = get_env_var("VLLM_URL", "http://localhost:8000")
+    VLLM_API_KEY = get_env_var("VLLM_API_KEY", "")
     
     # MinIO Configuration (Object Storage) - using Docker service names
     MINIO_ENDPOINT = get_env_var("MINIO_ENDPOINT", "minio:9000")

@@ -570,3 +570,51 @@ CREATE TABLE IF NOT EXISTS embeddings (
 );
 
 CREATE INDEX IF NOT EXISTS idx_embeddings_tenant ON embeddings(tenant_id);
+
+-- ============================================
+-- TAB_MCP_CLIENT CONFIGURATION TABLES
+-- ============================================
+-- Added for TAB_MCP_Client configuration management and versioning
+
+-- Tenant Configuration Versioning Table
+CREATE TABLE IF NOT EXISTS tenant_configs (
+    tenant_id VARCHAR(255) PRIMARY KEY,
+    config_data JSONB NOT NULL,
+    versions JSONB DEFAULT '[]',
+    current_version_id VARCHAR(255),
+    status VARCHAR(50) DEFAULT 'active',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (tenant_id) REFERENCES tenants(tenant_id) ON DELETE CASCADE
+);
+
+-- Domain Configuration Versioning Table
+CREATE TABLE IF NOT EXISTS domain_configs (
+    domain_id VARCHAR(255) PRIMARY KEY,
+    tenant_id VARCHAR(255) NOT NULL,
+    config_data JSONB NOT NULL,
+    versions JSONB DEFAULT '[]',
+    current_version_id VARCHAR(255),
+    status VARCHAR(50) DEFAULT 'active',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (tenant_id) REFERENCES tenants(tenant_id) ON DELETE CASCADE,
+    FOREIGN KEY (domain_id) REFERENCES domains(domain_id) ON DELETE CASCADE
+);
+
+-- Agent Team Configuration Table
+CREATE TABLE IF NOT EXISTS agent_teams (
+    team_id VARCHAR(255) PRIMARY KEY,
+    tenant_id VARCHAR(255) NOT NULL,
+    config_data JSONB NOT NULL,
+    status VARCHAR(50) DEFAULT 'active',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (tenant_id) REFERENCES tenants(tenant_id) ON DELETE CASCADE
+);
+
+-- Add indexes for performance
+CREATE INDEX IF NOT EXISTS idx_tenant_configs_status ON tenant_configs(status);
+CREATE INDEX IF NOT EXISTS idx_domain_configs_tenant ON domain_configs(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_domain_configs_status ON domain_configs(status);
+CREATE INDEX IF NOT EXISTS idx_agent_teams_tenant ON agent_teams(tenant_id);

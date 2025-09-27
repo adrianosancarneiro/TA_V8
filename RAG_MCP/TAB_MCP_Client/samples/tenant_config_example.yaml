@@ -1,0 +1,55 @@
+# Sample Tenant Configuration
+# ============================
+# This is an example tenant configuration file for TAB_MCP_Client
+
+tenant_id: "tenant_acme_001"
+name: "acme_corp"
+display_name: "ACME Corporation"
+industry: "Technology Solutions"
+subscription_tier: "enterprise"
+
+# Organization Details
+headquarters_location: "San Francisco, CA, USA"
+founding_year: 2015
+employee_count: 500
+annual_revenue: 50000000
+currency: "USD"
+
+# Compliance & Governance
+compliance_frameworks:
+  - "ISO 27001"
+  - "SOC 2 Type II"
+  - "GDPR"
+  - "CCPA"
+data_residency: "US"
+
+# Technical Configuration
+core_tech_stack:
+  - "AWS"
+  - "Kubernetes"
+  - "PostgreSQL"
+  - "Neo4j"
+  - "Python"
+  - "React"
+api_rate_limit: 10000
+storage_quota_gb: 1000
+max_users: 100
+
+# Default Settings
+default_embedding_model: "multilingual-e5-large"
+default_chunking_method: "semantic_coherence"
+default_chunk_size: 512
+
+# Metadata
+metadata:
+  business_unit: "Engineering"
+  cost_center: "CC-001"
+  project_codes: ["PROJ-AI-001", "PROJ-RAG-001"]
+  contact_email: "admin@acme-corp.com"
+  sla_tier: "platinum"
+  custom_fields:
+    ai_maturity_level: "advanced"
+    preferred_llm: "gpt-4"
+    data_classification: "confidential"
+
+status: "active"

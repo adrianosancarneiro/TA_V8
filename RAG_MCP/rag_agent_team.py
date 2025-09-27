@@ -38,7 +38,7 @@ try:
     LANGGRAPH_AVAILABLE = True
 except ImportError as e:
     LANGGRAPH_AVAILABLE = False
-    logging.warning(f"LangGraph and/or AutoGen not available: {e}. Install with: uv add langgraph autogen")
+    logging.warning(f"LangGraph and/or AutoGen not available: {e}. Install with: pip install langgraph autogen")
 
 # Configure logging for comprehensive monitoring
 logging.basicConfig(
@@ -132,14 +132,26 @@ class RAGAgentTeam:
         self.langgraph_workflow = None
         self.autogen_agents = None
 
-        # Service endpoints (prefer environment overrides)
-        self.chunking_mcp_url = os.getenv("CHUNKING_MCP_URL", "http://localhost:8001")
-        self.embedding_mcp_url = os.getenv("EMBEDDING_MCP_URL", "http://localhost:8012")
-        self.retrieval_mcp_url = os.getenv("RETRIEVAL_MCP_URL", "http://localhost:8003")
-        self.ollama_url = os.getenv("OLLAMA_URL", "http://localhost:11434")
+        # Service configuration - check for stdio vs HTTP transport
+        self.mcp_transport = os.getenv("MCP_TRANSPORT", "http")
+        
+        if self.mcp_transport == "stdio":
+            # MCP stdio service names for systemd services
+            self.chunking_mcp_service = os.getenv("CHUNKING_MCP_SERVICE", "chunking-mcp")
+            self.embedding_mcp_service = os.getenv("EMBEDDING_MCP_SERVICE", "embedding-mcp") 
+            self.retrieval_mcp_service = os.getenv("RETRIEVAL_MCP_SERVICE", "retrieval-mcp")
+            # Initialize MCP stdio clients
+            self.mcp_clients = {}
+        else:
+            # HTTP service endpoints (updated ports for HTTP + SSE)
+            self.chunking_mcp_url = os.getenv("CHUNKING_MCP_URL", "http://localhost:8001")
+            self.embedding_mcp_url = os.getenv("EMBEDDING_MCP_URL", "http://localhost:8004")
+            self.retrieval_mcp_url = os.getenv("RETRIEVAL_MCP_URL", "http://localhost:8003")
+            
+        self.vllm_url = os.getenv("VLLM_URL", "http://localhost:8000")
 
-        # LLM configuration
-        self.model = os.getenv("DEFAULT_LLM", "llama3.2:latest")
+        # LLM configuration for vLLM
+        self.model = os.getenv("DEFAULT_LLM", "openai/gpt-oss-20b")
 
         # HTTP client configuration
         self.http_client = httpx.AsyncClient(
@@ -185,25 +197,50 @@ class RAGAgentTeam:
         logger.info("✅ RAG Agent Team async initialization completed")
     
     async def _test_mcp_connections(self):
-        """Test connections to MCP services"""
-        services = [
-            ("Retrieval MCP", self.retrieval_mcp_url),
-            ("Embedding MCP", self.embedding_mcp_url), 
-            ("Chunking MCP", self.chunking_mcp_url)
-        ]
-        
-        for service_name, url in services:
-            try:
-                response = await self.http_client.get(
-                    f"{url}/health",
-                    timeout=5.0
-                )
-                if response.status_code == 200:
-                    logger.info(f"✅ {service_name} service healthy")
-                else:
-                    logger.warning(f"⚠️ {service_name} service returned {response.status_code}")
-            except Exception as e:
-                logger.warning(f"⚠️ {service_name} service connection failed: {str(e)}")
+        """Test connections to MCP services based on transport mode"""
+        if self.mcp_transport == "stdio":
+            # Test systemd services for stdio MCP transport
+            import subprocess
+            services = [
+                ("Retrieval MCP", self.retrieval_mcp_service),
+                ("Embedding MCP", self.embedding_mcp_service), 
+                ("Chunking MCP", self.chunking_mcp_service)
+            ]
+            
+            for service_name, systemd_service in services:
+                try:
+                    result = subprocess.run(
+                        ["systemctl", "is-active", systemd_service],
+                        capture_output=True, text=True, timeout=5
+                    )
+                    
+                    if result.returncode == 0 and result.stdout.strip() == "active":
+                        logger.info(f"✅ {service_name} systemd service is active")
+                    else:
+                        logger.warning(f"⚠️ {service_name} systemd service is not active: {result.stdout.strip()}")
+                        
+                except Exception as e:
+                    logger.warning(f"⚠️ {service_name} service connection failed: {str(e)}")
+        else:
+            # HTTP transport (legacy mode)
+            services = [
+                ("Retrieval MCP", self.retrieval_mcp_url),
+                ("Embedding MCP", self.embedding_mcp_url), 
+                ("Chunking MCP", self.chunking_mcp_url)
+            ]
+            
+            for service_name, url in services:
+                try:
+                    response = await self.http_client.get(
+                        f"{url}/health",
+                        timeout=5.0
+                    )
+                    if response.status_code == 200:
+                        logger.info(f"✅ {service_name} service healthy")
+                    else:
+                        logger.warning(f"⚠️ {service_name} service returned {response.status_code}")
+                except Exception as e:
+                    logger.warning(f"⚠️ {service_name} service connection failed: {str(e)}")
     
     def _initialize_agents(self):
         """Initialize specialized agents for critic-driven RAG system"""
@@ -376,9 +413,9 @@ OUTPUT FORMAT:
             llm_config = {
                 "config_list": [{
                     "model": self.model,
-                    "base_url": f"{self.ollama_url}/v1",
-                    "api_key": "ollama",  # Ollama doesn't need real API key
-                    "api_type": "ollama"
+                    "base_url": f"{self.vllm_url}/v1",
+                    "api_key": "vllm",  # vLLM doesn't need real API key for local deployment
+                    "api_type": "openai"
                 }],
                 "temperature": 0.7,
                 "timeout": 60
@@ -515,47 +552,115 @@ OUTPUT FORMAT:
                     "capabilities": agent.capabilities or {}
                 }
 
-            # Service connectivity
-            services_to_check = [
-                ("chunking_mcp", self.chunking_mcp_url),
-                ("embedding_mcp", self.embedding_mcp_url),
-                ("retrieval_mcp", self.retrieval_mcp_url),
-                ("ollama", self.ollama_url)
-            ]
-
-            for service_name, service_url in services_to_check:
+            # Service connectivity based on transport mode
+            if self.mcp_transport == "stdio":
+                # Check systemd services status for stdio MCP services
+                import subprocess
+                services_to_check = [
+                    ("chunking_mcp", self.chunking_mcp_service),
+                    ("embedding_mcp", self.embedding_mcp_service),
+                    ("retrieval_mcp", self.retrieval_mcp_service),
+                ]
+                
+                for service_name, service_systemd_name in services_to_check:
+                    try:
+                        # Check if systemd service is active
+                        result = subprocess.run(
+                            ["systemctl", "is-active", service_systemd_name],
+                            capture_output=True, text=True, timeout=5
+                        )
+                        
+                        if result.returncode == 0 and result.stdout.strip() == "active":
+                            health_status["services"][service_name] = {
+                                "status": "healthy",
+                                "transport": "stdio",
+                                "systemd_service": service_systemd_name,
+                                "response_time": None
+                            }
+                        else:
+                            health_status["services"][service_name] = {
+                                "status": "unhealthy",
+                                "transport": "stdio", 
+                                "systemd_service": service_systemd_name,
+                                "error": f"Service not active: {result.stdout.strip()}"
+                            }
+                            healthy_services += 1
+                            
+                    except Exception as e:
+                        health_status["services"][service_name] = {
+                            "status": "error",
+                            "transport": "stdio",
+                            "systemd_service": service_systemd_name,
+                            "error": str(e)
+                        }
+                        
+                # Always check vLLM via HTTP
                 try:
-                    # Use different endpoint for Ollama health check
-                    if service_name == "ollama":
-                        health_endpoint = service_url  # Root endpoint returns "Ollama is running"
-                    else:
-                        health_endpoint = f"{service_url}/health"
+                    response = await self.http_client.get(f"{self.vllm_url}/v1/models", timeout=5.0)
+                    response_time = (response.elapsed.total_seconds() * 1000 if response.elapsed else None)
                     
-                    response = await self.http_client.get(
-                        health_endpoint,
-                        timeout=5.0
-                    )
-                    response_time = (
-                        response.elapsed.total_seconds() * 1000
-                        if response.elapsed is not None else None
-                    )
-
-                    health_status["services"][service_name] = {
+                    health_status["services"]["vllm"] = {
                         "status": "healthy" if response.status_code == 200 else "unhealthy",
-                        "response_time_ms": response_time,
-                        "url": service_url
+                        "transport": "http",
+                        "url": self.vllm_url,
+                        "response_time": response_time,
+                        "status_code": response.status_code
                     }
-
-                    if response.status_code != 200:
-                        health_status["status"] = "degraded"
-
-                except Exception as exc:
-                    health_status["services"][service_name] = {
-                        "status": "unhealthy",
-                        "error": str(exc),
-                        "url": service_url
+                    
+                    if response.status_code == 200:
+                        healthy_services += 1
+                        
+                except Exception as e:
+                    health_status["services"]["vllm"] = {
+                        "status": "error",
+                        "transport": "http", 
+                        "url": self.vllm_url,
+                        "error": str(e)
                     }
-                    health_status["status"] = "degraded"
+                    
+            else:
+                # HTTP transport mode (legacy)
+                services_to_check = [
+                    ("chunking_mcp", self.chunking_mcp_url),
+                    ("embedding_mcp", self.embedding_mcp_url),
+                    ("retrieval_mcp", self.retrieval_mcp_url),
+                    ("vllm", self.vllm_url)
+                ]
+
+                for service_name, service_url in services_to_check:
+                    try:
+                        # Use different endpoint for vLLM health check
+                        if service_name == "vllm":
+                            health_endpoint = f"{service_url}/v1/models"  # vLLM models endpoint
+                        else:
+                            health_endpoint = f"{service_url}/health"
+                        
+                        response = await self.http_client.get(
+                            health_endpoint,
+                            timeout=5.0
+                        )
+                        response_time = (
+                            response.elapsed.total_seconds() * 1000
+                            if response.elapsed is not None else None
+                        )
+
+                        health_status["services"][service_name] = {
+                            "status": "healthy" if response.status_code == 200 else "unhealthy",
+                            "transport": "http",
+                            "response_time_ms": response_time,
+                            "url": service_url
+                        }
+
+                        if response.status_code == 200:
+                            healthy_services += 1
+
+                    except Exception as exc:
+                        health_status["services"][service_name] = {
+                            "status": "unhealthy",
+                            "transport": "http",
+                            "error": str(exc),
+                            "url": service_url
+                        }
 
             return health_status
 
@@ -779,27 +884,35 @@ Provide your evaluation."""
             
             logger.info(f"⚖️ Critic evaluating round {state.current_round}")
             
-            # Use Ollama for evaluation
-            ollama_request = {
+            # Use vLLM for evaluation
+            vllm_request = {
                 "model": self.model,
                 "messages": [
                     {"role": "system", "content": system_message},
                     {"role": "user", "content": user_message}
                 ],
-                "stream": False,
-                "format": "json"
+                "temperature": 0.3,  # Lower temperature for consistent evaluation
+                "max_tokens": 500
             }
 
             response = await self.http_client.post(
-                f"{self.ollama_url}/api/chat",
-                json=ollama_request,
+                f"{self.vllm_url}/v1/chat/completions",
+                json=vllm_request,
                 timeout=60.0
             )
 
             if response.status_code == 200:
                 result = response.json()
-                content = result.get("message", {}).get("content", "{}")
-                evaluation = json.loads(content)
+                content = result["choices"][0]["message"]["content"]
+                try:
+                    evaluation = json.loads(content)
+                except json.JSONDecodeError:
+                    # Fallback if JSON parsing fails
+                    is_sufficient = "sufficient" in content.lower() or "good" in content.lower()
+                    evaluation = {
+                        "is_sufficient": is_sufficient,
+                        "feedback": content
+                    }
                 
                 is_sufficient = evaluation.get("is_sufficient", False)
                 feedback = evaluation.get("feedback", "")
@@ -868,27 +981,35 @@ Generate the final comprehensive answer."""
             
             logger.info(f"🔧 Refiner executing in {mode} mode")
             
-            # Use Ollama for refinement/response
-            ollama_request = {
+            # Use vLLM for refinement/response
+            vllm_request = {
                 "model": self.model,
                 "messages": [
                     {"role": "system", "content": system_message},
                     {"role": "user", "content": user_message}
                 ],
-                "stream": False,
-                "format": "json"
+                "temperature": 0.7,
+                "max_tokens": 2000
             }
 
             response = await self.http_client.post(
-                f"{self.ollama_url}/api/chat",
-                json=ollama_request,
+                f"{self.vllm_url}/v1/chat/completions",
+                json=vllm_request,
                 timeout=90.0
             )
 
             if response.status_code == 200:
                 result = response.json()
-                content = result.get("message", {}).get("content", "{}")
-                refinement_result = json.loads(content)
+                content = result["choices"][0]["message"]["content"]
+                try:
+                    refinement_result = json.loads(content)
+                except json.JSONDecodeError:
+                    # Fallback for non-JSON responses
+                    refinement_result = {
+                        "suggestions": [content] if mode == "refinement" else [],
+                        "final_response": content if mode == "response" else "",
+                        "raw_content": content
+                    }
                 
                 if mode == "refinement":
                     suggestions = refinement_result.get("suggestions", [])
@@ -910,29 +1031,29 @@ Generate the final comprehensive answer."""
     # implement the modern multi-agent approach with iterative improvement
 
     async def _generate_llm_response(self, prompt: str) -> str:
-        """Generate response using Ollama LLM service"""
+        """Generate response using vLLM LLM service with OpenAI-compatible API"""
         try:
-            ollama_request = {
+            vllm_request = {
                 "model": self.model,
-                "prompt": prompt,
-                "stream": False,
-                "options": {
-                    "temperature": 0.7,
-                    "max_tokens": 2000,
-                    "top_p": 0.9,
-                    "stop": ["\\n\\nUser:", "\\n\\nHuman:"]
-                }
+                "messages": [
+                    {"role": "system", "content": "You are a helpful AI assistant."},
+                    {"role": "user", "content": prompt}
+                ],
+                "temperature": 0.7,
+                "max_tokens": 2000,
+                "top_p": 0.9,
+                "stop": ["\\n\\nUser:", "\\n\\nHuman:"]
             }
             
             response = await self.http_client.post(
-                f"{self.ollama_url}/api/generate",
-                json=ollama_request,
+                f"{self.vllm_url}/v1/chat/completions",
+                json=vllm_request,
                 timeout=60.0
             )
             response.raise_for_status()
             
             response_data = response.json()
-            generated_text = response_data.get("response", "")
+            generated_text = response_data["choices"][0]["message"]["content"]
             
             if not generated_text:
                 raise Exception("Empty response from LLM")

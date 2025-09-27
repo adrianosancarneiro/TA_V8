@@ -1,0 +1,69 @@
+[Unit]
+Description=TA_V8 RAG MCP Services - HTTP Transport Mode
+Documentation=https://github.com/TA_V8/RAG_MCP
+After=network.target postgresql.service neo4j.service qdrant.service minio.service
+Wants=postgresql.service neo4j.service qdrant.service minio.service
+
+[Service]
+Type=forking
+User=mentorius
+Group=mentorius
+
+# Working directory
+WorkingDirectory=/home/mentorius/AI_Services/TA_V8/RAG_MCP
+
+# Environment configuration for HTTP + SSE transport
+Environment="MCP_TRANSPORT=http"
+Environment="VLLM_URL=http://localhost:8000"
+Environment="CHUNKING_MCP_URL=http://localhost:8001"
+Environment="EMBEDDING_MCP_URL=http://localhost:8004"
+Environment="RETRIEVAL_MCP_URL=http://localhost:8003"
+Environment="RAG_AGENT_TEAM_URL=http://localhost:8006"
+
+# Database connections
+Environment="POSTGRES_HOST=localhost"
+Environment="POSTGRES_PORT=5432"
+Environment="POSTGRES_DATABASE=ta_v8"
+Environment="POSTGRES_USER=postgres_user"
+Environment="POSTGRES_PASSWORD=postgres_pass"
+Environment="NEO4J_URI=bolt://localhost:7687"
+Environment="NEO4J_USER=neo4j"
+Environment="NEO4J_PASSWORD=pJnssz3khcLtn6T"
+Environment="QDRANT_HOST=localhost"
+Environment="QDRANT_PORT=6333"
+Environment="MINIO_ENDPOINT=localhost:9000"
+
+# Python environment
+Environment="PYTHONPATH=/home/mentorius/AI_Services/TA_V8/RAG_MCP"
+Environment="VIRTUAL_ENV=/home/mentorius/AI_Services/TA_V8/RAG_MCP/.venv"
+Environment="PATH=/home/mentorius/AI_Services/TA_V8/RAG_MCP/.venv/bin:/usr/local/bin:/usr/bin:/bin"
+
+# Service management via script
+ExecStart=/home/mentorius/AI_Services/TA_V8/RAG_MCP/manage_http_services.sh start
+ExecStop=/home/mentorius/AI_Services/TA_V8/RAG_MCP/manage_http_services.sh stop
+ExecReload=/home/mentorius/AI_Services/TA_V8/RAG_MCP/manage_http_services.sh restart
+
+# PID and runtime management
+PIDFile=/home/mentorius/AI_Services/TA_V8/RAG_MCP/pids/rag-mcp-http.pid
+
+# Service behavior
+Restart=always
+RestartSec=10
+TimeoutStartSec=30
+TimeoutStopSec=30
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=rag-mcp-http
+
+[Install]
+WantedBy=multi-user.target

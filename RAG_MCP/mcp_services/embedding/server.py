@@ -4,7 +4,7 @@
 # MCP SERVICE: EMBEDDING 
 # =============================================================================
 # Purpose: Vector embedding generation service for multi-agent RAG system
-# Port: 8002
+# Port: 8004
 # Protocol: MCP-compliant via /mcp/execute endpoint
 # 
 # Integration Points:
@@ -23,20 +23,29 @@ import os
 import json
 import hashlib
 import logging
+import argparse
+import asyncio
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 
 import asyncpg
 import httpx
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct
+from mcp.server import FastMCP
+from mcp import types
+import uvicorn
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Determine MCP transport mode from environment
+transport_mode = os.getenv("MCP_TRANSPORT", "stdio").lower()
+
+# Always use FastAPI for HTTP endpoints, but add MCP compatibility
 app = FastAPI(title="Embedding MCP Server", version="1.0.0")
 
 # ============ MCP Request/Response Models ============
@@ -401,17 +410,123 @@ async def health_check():
             "error": str(e)
         }
 
+# ============ MCP HTTP Endpoints (for HTTP + SSE transport) ============
+
+# HTTP MCP Endpoints for web clients
+@app.post("/mcp/initialize")
+async def mcp_initialize(request: Request):
+    """MCP initialization endpoint"""
+    return {
+        "protocolVersion": "2024-11-05",
+        "capabilities": {
+            "tools": {"listChanged": True}
+        },
+        "serverInfo": {
+            "name": "embedding-mcp",
+            "version": "1.0.0"
+        }
+    }
+
+@app.get("/mcp/tools/list")
+async def mcp_tools_list():
+    """List available MCP tools via HTTP"""
+    tools = [
+        {
+            "name": "embed_documents",
+            "description": "Generate embeddings for documents and store in vector database",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "id": {"type": "string", "description": "Document ID"},
+                                "text": {"type": "string", "description": "Text to embed"},
+                                "metadata": {"type": "object", "description": "Document metadata"}
+                            },
+                            "required": ["id", "text"]
+                        }
+                    },
+                    "tenant_id": {"type": "string", "description": "Tenant identifier"},
+                    "collection": {"type": "string", "description": "Collection name"}
+                },
+                "required": ["items", "tenant_id", "collection"]
+            }
+        }
+    ]
+    return {"tools": tools}
+
+@app.post("/mcp/tools/call")
+async def mcp_tools_call(call_request: dict):
+    """Execute MCP tool calls via HTTP"""
+    tool_name = call_request.get("name")
+    arguments = call_request.get("arguments", {})
+    
+    if tool_name == "embed_documents":
+        try:
+            # Convert arguments to MCPEmbedRequest format
+            items = [EmbedItem(**item) for item in arguments["items"]]
+            request = MCPEmbedRequest(
+                tenant_id=arguments["tenant_id"],
+                collection=arguments["collection"],
+                items=items,
+                upsert=arguments.get("upsert", True),
+                metadata=arguments.get("metadata", {})
+            )
+            
+            # Execute embedding
+            response = await embedding_service.process_embeddings(request)
+            
+            # Format results as TextContent
+            if response.error:
+                result_text = f"Error: {response.error}"
+            else:
+                result_text = f"Successfully embedded {len(response.embedded_ids)} documents."
+            
+            return {"content": [{"type": "text", "text": result_text}]}
+            
+        except Exception as e:
+            logger.error(f"Tool execution error: {str(e)}")
+            return {"content": [{"type": "text", "text": f"Error: {str(e)}"}]}
+    else:
+        return {"content": [{"type": "text", "text": f"Unknown tool: {tool_name}"}]}
+
 # ============ Main Application Entry Point ============
 
 if __name__ == "__main__":
-    import uvicorn
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description="Embedding MCP Server")
+    parser.add_argument("--host", default="0.0.0.0", help="Host to bind to")
+    parser.add_argument("--port", type=int, default=8004, help="Port to bind to")
+    parser.add_argument("--transport", choices=['stdio', 'http'], default='stdio',
+                        help="Transport mode (default: stdio)")
+    args = parser.parse_args()
     
-    # Production-ready ASGI server configuration
-    uvicorn.run(
-        "server:app",  # Module:app reference
-        host="0.0.0.0",  # Bind to all interfaces for container deployment
-        port=8002,       # Standard port for embedding MCP service  
-        reload=False,    # Disable reload in production
-        workers=1,       # Single worker for MVP, scale as needed
-        log_level="info"
-    )
+    # Override with environment variable if set
+    transport = os.getenv("MCP_TRANSPORT", args.transport).lower()
+    
+    if transport == "http":
+        logger.info("Starting Embedding MCP Server in HTTP mode...")
+        
+        # Initialize service before starting server
+        async def startup():
+            await embedding_service.startup()
+        
+        # Run startup
+        asyncio.run(startup())
+        
+        # Production-ready ASGI server configuration
+        uvicorn.run(
+            app,
+            host=args.host,
+            port=args.port,
+            reload=False,
+            workers=1,
+            log_level="info"
+        )
+    else:
+        logger.info("stdio mode not implemented - use HTTP mode")
+        logger.info("Use: python server.py --transport http")
+        exit(1)
